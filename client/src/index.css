@@ -1,0 +1,73 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap');
+@import "tailwindcss";
+@tailwind utilities;
+
+
+*{
+  font-family: Outfit;
+}
+
+@theme {
+  /* ===== Font size mặc định ===== */
+  --text-default: 15px;
+  --leading-default: 21px;
+
+  /* ===== Home heading ===== */
+  --text-home-heading-small: 28px;
+  --leading-home-heading-small: 34px;
+
+  --text-home-heading-large: 48px;
+  --leading-home-heading-large: 56px;
+
+  /* ===== Course details heading ===== */
+  --text-course-details-heading-small: 26px;
+  --leading-course-details-heading-small: 36px;
+
+  --text-course-details-heading-large: 36px;
+  --leading-course-details-heading-large: 44px;
+
+  --grid-template-columns-auto: repeat(auto-fit, minmax(200px, 1fr));
+
+  --spacing-section-height: 500px;
+
+  /* ===== Max width ===== */
+  --max-width-course-card: 424px;
+
+  /* ===== Box shadow ===== */
+  --shadow-custom-card: 0 4px 15px 2px rgba(0, 0, 0, 0.1);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth ;
+  }
+}
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+.rich-text { font-size: 15px; color: #7A7B7D; }
+
+.rich-text p { margin-bottom: 16px; }
+
+.rich-text h1 { font-size: 36px; font-weight: 800; color: #252525; margin: 32px 0; }
+
+.rich-text h2 { font-size: 22px; font-weight: 700; color: #252525; margin: 24px 0; }
+
+.rich-text h3 { font-size: 18px; font-weight: 600; color: #333333; margin: 20px 0; }
+
+.rich-text h4 { font-size: 16px; font-weight: 500; color: #444444; margin: 16px 0; }
+
+.rich-text h5 { font-size: 14px; font-weight: 400; color: #555555; margin: 12px 0; }
+
+.rich-text h6 { font-size: 12px; font-weight: 400; color: #666666; margin: 8px 0; }
+
+.rich-text strong { font-weight: 700; }
+
+.rich-text ol { margin-left: 30px; list-style-type: decimal; }
+
+.rich-text ul { margin-left: 30px; list-style-type: disc; }
+
+.rich-text li { margin-bottom: 8px; }
+
