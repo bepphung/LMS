@@ -142,15 +142,16 @@ export const addUserRating = async (req, res) => {
     }
 
     const user = await User.findById(userId)
-    if (!user || !user.enrolledCourses.includes(courseId)) {
+    if (!user || !user.enrolledCourses.map(c => c.toString()).includes(courseId.toString())) {
       return res.json({ success: false, message: 'User not enrolled in this course' })
     }
 
+    // Use field name `Rating` to match Course schema (case-sensitive)
     const existingRatingIndex = course.courseRatings.findIndex(r => r.userId === userId)
     if (existingRatingIndex > -1) {
-      course.courseRatings[existingRatingIndex].rating = rating
+      course.courseRatings[existingRatingIndex].Rating = rating
     } else {
-      course.courseRatings.push({ userId, rating })
+      course.courseRatings.push({ userId, Rating: rating })
     }
     await course.save()
     res.json({ success: true, message: 'Rating submitted successfully' })
