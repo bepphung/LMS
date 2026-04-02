@@ -6,7 +6,7 @@ import Course from "../models/Course.js"
 
 // API Controller function to manage clerk user with database
 export const clerkWebhooks = async (req, res) => {
-  console.log('Webhook called');
+  console.log('=== WEBHOOK CALLED ===');
   try {
     const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
 
@@ -18,20 +18,23 @@ export const clerkWebhooks = async (req, res) => {
 
     const {data, type} = req.body;
     console.log('Webhook type:', type);
-    console.log('Webhook data:', data);
+    console.log('Webhook data ID:', data?.id);
 
     switch (type) {
       case 'user.created': {
+        console.log('>>> Processing user.created event');
         const userData = {
           _id: data.id,
           email: data.email_addresses[0].email_address,
           name: data.first_name + ' ' + data.last_name,
-          imageUrl: data.image_url
+          imageUrl: data.image_url,
+          role: 'student' // Mặc định là student
         };
-        console.log('Preparing to create user:', userData);
+        console.log('>>> Preparing to create user:', JSON.stringify(userData, null, 2));
+        
         const user = await User.create(userData);
-        console.log('User created:', user);
-        res.json({});
+        console.log('>>> User created successfully:', user._id, 'with role:', user.role);
+        res.json({ success: true });
         break;
       }
       case 'user.updated': {
