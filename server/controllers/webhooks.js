@@ -4,6 +4,18 @@ import Stripe from "stripe"
 import { Purchase } from "../models/Purchases.js"
 import Course from "../models/Course.js"
 
+const getClerkUserName = (data) => {
+  const firstName = data?.first_name?.trim() || ''
+  const lastName = data?.last_name?.trim() || ''
+  const fullName = `${firstName} ${lastName}`.trim()
+  if (fullName) return fullName
+
+  const primaryEmail = data?.email_addresses?.[0]?.email_address
+  if (primaryEmail) return primaryEmail.split('@')[0]
+
+  return 'Unknown User'
+}
+
 // API Controller function to manage clerk user with database
 export const clerkWebhooks = async (req, res) => {
   console.log('=== WEBHOOK CALLED ===');
@@ -26,7 +38,7 @@ export const clerkWebhooks = async (req, res) => {
         const userData = {
           _id: data.id,
           email: data.email_addresses[0].email_address,
-          name: data.first_name + ' ' + data.last_name,
+          name: getClerkUserName(data),
           imageUrl: data.image_url,
           role: 'student' // Mặc định là student
         };
@@ -40,7 +52,7 @@ export const clerkWebhooks = async (req, res) => {
       case 'user.updated': {
         const userData = {
           email: data.email_addresses[0].email_address,
-          name: data.first_name + ' ' + data.last_name,
+          name: getClerkUserName(data),
           imageUrl: data.image_url
         };
         console.log('Preparing to update user:', userData);

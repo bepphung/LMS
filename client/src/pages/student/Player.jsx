@@ -9,6 +9,8 @@ import Rating from '../../components/student/Rating'
 import axios from 'axios'
 import { toast } from 'react-toastify'
 import Loading from '../../components/student/Loading'
+import AIChatbot, { AIFloatingButton } from '../../components/student/AIChatbot'
+import { AILessonSummary, AIQuizGenerator } from '../../components/student/AITools'
 
 const Player = () => {
 
@@ -20,6 +22,13 @@ const Player = () => {
   const [playerData, setPlayerData] = useState(null)
   const [progressData, setProgressData] = useState(null)
   const [initialRating, setInitialRating] = useState(0)
+  
+  // AI features state
+  const [showAIChat, setShowAIChat] = useState(false)
+  const [showAISummary, setShowAISummary] = useState(false)
+  const [showAIQuiz, setShowAIQuiz] = useState(false)
+  const [currentChapterIndex, setCurrentChapterIndex] = useState(0)
+  const [currentLectureIndex, setCurrentLectureIndex] = useState(0)
 
   const getCourseData = () => {
     enrolledCourses.map((course) => {
@@ -187,6 +196,45 @@ const Player = () => {
                 <p>{playerData.chapter}.{playerData.lecture} {playerData.lectureTitle}</p>
                 <button onClick={() => markLectureAsCompleted(playerData.lectureId)} className='text-blue-600'>{progressData && progressData.lectureCompleted.includes(playerData.lectureId) ? 'Completed' : 'Mark as Completed'}</button>
               </div>
+              
+              {/* AI Tools Bar */}
+              <div className='flex flex-wrap gap-2 mt-4 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border'>
+                <span className='text-sm text-gray-500 w-full mb-2'>Công cụ AI:</span>
+                <button
+                  onClick={() => {
+                    setCurrentChapterIndex(playerData.chapter - 1)
+                    setCurrentLectureIndex(playerData.lecture - 1)
+                    setShowAISummary(true)
+                  }}
+                  className='inline-flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm'
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Tóm tắt bài học
+                </button>
+                <button
+                  onClick={() => {
+                    setCurrentChapterIndex(playerData.chapter - 1)
+                    setShowAIQuiz(true)
+                  }}
+                  className='inline-flex items-center gap-2 px-4 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors text-sm'
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  Làm Quiz
+                </button>
+                <button
+                  onClick={() => setShowAIChat(true)}
+                  className='inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm'
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  </svg>
+                  Hỏi AI
+                </button>
+              </div>
             </div>
           ) 
           :
@@ -195,6 +243,37 @@ const Player = () => {
           
         </div>
       </div>
+      
+      {/* AI Chatbot */}
+      <AIChatbot 
+        courseId={courseId} 
+        lessonContext={playerData?.lectureTitle}
+        isOpen={showAIChat} 
+        onClose={() => setShowAIChat(false)} 
+      />
+      
+      {/* AI Summary Modal */}
+      {showAISummary && (
+        <AILessonSummary
+          courseId={courseId}
+          chapterIndex={currentChapterIndex}
+          lectureIndex={currentLectureIndex}
+          onClose={() => setShowAISummary(false)}
+        />
+      )}
+      
+      {/* AI Quiz Modal */}
+      {showAIQuiz && (
+        <AIQuizGenerator
+          courseId={courseId}
+          chapterIndex={currentChapterIndex}
+          onClose={() => setShowAIQuiz(false)}
+        />
+      )}
+      
+      {/* Floating AI Button */}
+      {!showAIChat && <AIFloatingButton onClick={() => setShowAIChat(true)} />}
+      
       <Footer />
     </>
   ) : <Loading />

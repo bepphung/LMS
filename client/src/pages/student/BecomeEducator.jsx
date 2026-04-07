@@ -1,4 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react'
+import { useUser, SignInButton } from '@clerk/clerk-react'
 import { AppContext } from '../../context/AppContext'
 import axios from 'axios'
 import { toast } from 'react-toastify'
@@ -7,6 +8,7 @@ import Footer from '../../components/student/Footer'
 
 const BecomeEducator = () => {
   const { backendUrl, getToken, userData, navigate, isEducator } = useContext(AppContext)
+  const { isSignedIn, isLoaded } = useUser()
   
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -91,6 +93,12 @@ const BecomeEducator = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
+    // Check if user is signed in
+    if (!isSignedIn) {
+      toast.error('Vui lòng đăng nhập để gửi đơn')
+      return
+    }
+    
     // Validation
     const required = ['fullName', 'email', 'phone', 'expertise', 'experience', 'qualification', 'courseTopics', 'teachingApproach']
     const missing = required.filter(field => !formData[field])
@@ -104,6 +112,12 @@ const BecomeEducator = () => {
     
     try {
       const token = await getToken()
+      if (!token) {
+        toast.error('Không thể xác thực. Vui lòng đăng nhập lại.')
+        setSubmitting(false)
+        return
+      }
+      
       const submitData = new FormData()
       
       // Append form fields
@@ -139,83 +153,198 @@ const BecomeEducator = () => {
     }
   }
 
-  if (loading) return <Loading />
+  if (loading || !isLoaded) return <Loading />
+  
+  // Show login prompt if not signed in
+  if (!isSignedIn) {
+    return (
+      <>
+        <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-8 text-center">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Đăng nhập để tiếp tục</h2>
+            <p className="text-gray-600 mb-6">
+              Bạn cần đăng nhập để gửi đơn đăng ký trở thành giảng viên
+            </p>
+            <SignInButton mode="modal">
+              <button className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700">
+                Đăng nhập ngay
+              </button>
+            </SignInButton>
+          </div>
+        </div>
+        <Footer />
+      </>
+    )
+  }
 
   // Show application status if exists
   if (applicationStatus) {
     return (
       <>
-        <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto">
-            <div className={`bg-white rounded-lg shadow-lg p-8 text-center ${
-              applicationStatus.status === 'approved' ? 'border-t-4 border-green-500' :
-              applicationStatus.status === 'rejected' ? 'border-t-4 border-red-500' :
-              'border-t-4 border-yellow-500'
-            }`}>
-              {applicationStatus.status === 'pending' && (
-                <>
-                  <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {/* Pending Status */}
+            {applicationStatus.status === 'pending' && (
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-gradient-to-r from-amber-400 to-orange-500 h-2"></div>
+                <div className="p-8 text-center">
+                  <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-10 h-10 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-800 mb-2">Đơn đang chờ xử lý</h2>
-                  <p className="text-gray-600 mb-4">
+                  <h2 className="text-2xl font-bold text-gray-800 mb-3">Đơn đang được xét duyệt</h2>
+                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
                     Đơn đăng ký của bạn đã được gửi thành công và đang chờ admin xem xét.
                     Chúng tôi sẽ gửi email thông báo kết quả cho bạn.
                   </p>
-                  <p className="text-sm text-gray-500">
-                    Ngày nộp: {new Date(applicationStatus.createdAt).toLocaleDateString('vi-VN')}
-                  </p>
-                </>
-              )}
-              
-              {applicationStatus.status === 'approved' && (
-                <>
-                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  
+                  {/* Status Info Card */}
+                  <div className="bg-amber-50 rounded-xl p-5 mb-6 text-left border border-amber-100">
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
+                      <span className="font-semibold text-amber-800">Trạng thái: Đang chờ duyệt</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-500">Ngày nộp đơn</p>
+                        <p className="font-medium text-gray-700">
+                          {new Date(applicationStatus.createdAt).toLocaleDateString('vi-VN', {
+                            day: '2-digit',
+                            month: '2-digit', 
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Họ tên</p>
+                        <p className="font-medium text-gray-700">{applicationStatus.fullName}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Email</p>
+                        <p className="font-medium text-gray-700">{applicationStatus.email}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Chuyên môn</p>
+                        <p className="font-medium text-gray-700">{applicationStatus.expertise}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => navigate('/')}
+                    className="inline-flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                    </svg>
+                    Quay lại trang chủ
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Approved Status */}
+            {applicationStatus.status === 'approved' && (
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-2"></div>
+                <div className="p-8 text-center">
+                  <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h2 className="text-2xl font-bold text-green-700 mb-2">Chúc mừng! Đơn đã được duyệt</h2>
-                  <p className="text-gray-600 mb-6">
-                    Bạn đã trở thành giảng viên. Hãy bắt đầu tạo khóa học đầu tiên!
+                  <h2 className="text-2xl font-bold text-green-700 mb-3">🎉 Chúc mừng! Đơn đã được duyệt</h2>
+                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                    Bạn đã chính thức trở thành giảng viên trên nền tảng của chúng tôi. 
+                    Hãy bắt đầu tạo khóa học đầu tiên và chia sẻ kiến thức của bạn!
                   </p>
+                  
+                  {/* Success Card */}
+                  <div className="bg-green-50 rounded-xl p-5 mb-6 text-left border border-green-100">
+                    <div className="flex items-center gap-3 mb-3">
+                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      <span className="font-semibold text-green-800">Trạng thái: Đã được duyệt</span>
+                    </div>
+                    <p className="text-sm text-green-700">
+                      Bạn có thể truy cập vào trang quản lý giảng viên để tạo và quản lý các khóa học của mình.
+                    </p>
+                  </div>
+
                   <button 
                     onClick={() => navigate('/educator')}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700"
+                    className="inline-flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-green-700 transition-colors shadow-lg shadow-green-200"
                   >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
                     Đến trang giảng viên
                   </button>
-                </>
-              )}
-              
-              {applicationStatus.status === 'rejected' && (
-                <>
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </div>
+              </div>
+            )}
+            
+            {/* Rejected Status */}
+            {applicationStatus.status === 'rejected' && (
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div className="bg-gradient-to-r from-red-400 to-rose-500 h-2"></div>
+                <div className="p-8 text-center">
+                  <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h2 className="text-2xl font-bold text-red-700 mb-2">Đơn chưa được duyệt</h2>
-                  <p className="text-gray-600 mb-4">
-                    Rất tiếc, đơn đăng ký của bạn chưa được chấp thuận.
+                  <h2 className="text-2xl font-bold text-red-700 mb-3">Đơn chưa được duyệt</h2>
+                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                    Rất tiếc, đơn đăng ký của bạn chưa được chấp thuận. 
+                    Vui lòng xem lý do bên dưới và cân nhắc nộp đơn mới.
                   </p>
+                  
+                  {/* Rejection Reason Card */}
                   {applicationStatus.rejectionReason && (
-                    <div className="bg-red-50 p-4 rounded-lg mb-4 text-left">
-                      <p className="font-medium text-red-800 mb-1">Lý do:</p>
-                      <p className="text-red-700">{applicationStatus.rejectionReason}</p>
+                    <div className="bg-red-50 rounded-xl p-5 mb-6 text-left border border-red-100">
+                      <div className="flex items-center gap-3 mb-3">
+                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span className="font-semibold text-red-800">Lý do từ chối:</span>
+                      </div>
+                      <p className="text-red-700 whitespace-pre-wrap">{applicationStatus.rejectionReason}</p>
                     </div>
                   )}
-                  <button 
-                    onClick={() => setApplicationStatus(null)}
-                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700"
-                  >
-                    Nộp đơn mới
-                  </button>
-                </>
-              )}
-            </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                    <button 
+                      onClick={() => navigate('/')}
+                      className="inline-flex items-center justify-center gap-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-xl font-medium hover:bg-gray-200 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                      </svg>
+                      Về trang chủ
+                    </button>
+                    <button 
+                      onClick={() => setApplicationStatus(null)}
+                      className="inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Nộp đơn mới
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <Footer />

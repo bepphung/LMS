@@ -1,12 +1,16 @@
 import React, { useEffect, useRef, useState, useContext } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import uniqid from 'uniqid'
 import Quill from 'quill'
 import { assets } from '../../assets/assets'
 import { AppContext } from '../../context/AppContext'
 import { toast } from 'react-toastify'
 import axios from 'axios'
 import Loading from '../../components/student/Loading'
+
+const generateId = () =>
+  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
 const EditCourse = () => {
   const { courseId } = useParams()
@@ -106,7 +110,7 @@ const EditCourse = () => {
       const title = prompt('Nhập tên chương:')
       if (title) {
         const newChapter = {
-          chapterId: uniqid(),
+          chapterId: generateId(),
           chapterTitle: title,
           chapterContent: [],
           collapsed: false,
@@ -166,7 +170,7 @@ const EditCourse = () => {
             ...lectureDetails,
             lectureDuration: Number(lectureDetails.lectureDuration),
             lectureOrder: chapter.chapterContent.length > 0 ? chapter.chapterContent.slice(-1)[0].lectureOrder + 1 : 1,
-            lectureId: uniqid()
+            lectureId: generateId()
           }
           chapter.chapterContent.push(newLecture)
         }

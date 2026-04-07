@@ -1,10 +1,15 @@
 import React, { useEffect, useRef, useState, useContext } from 'react'
-import uniqid from 'uniqid'
 import Quill from 'quill'
 import { assets } from '../../assets/assets'
 import { AppContext } from '../../context/AppContext'
 import { toast } from 'react-toastify'
 import axios from 'axios'
+import AIDescriptionGenerator from '../../components/educator/AIDescriptionGenerator'
+
+const generateId = () =>
+  (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 
 const AddCourse = () => {
 
@@ -31,7 +36,7 @@ const AddCourse = () => {
       const title = prompt('Enter Chapter Name:')
       if (title) {
       const newChapter = {
-        chapterId: uniqid(),
+        chapterId: generateId(),
         chapterTitle: title,
         chapterContent: [],
         collapsed: false,
@@ -73,7 +78,7 @@ const AddCourse = () => {
           const newLecture = {
             ...lectureDetails,
             lectureOrder: chapter.chapterContent.length > 0 ? chapter.chapterContent.slice(-1)[0].lectureOrder + 1 : 1,
-            lectureId: uniqid()
+            lectureId: generateId()
           }
           chapter.chapterContent.push(newLecture)
         }
@@ -94,6 +99,7 @@ const AddCourse = () => {
       e.preventDefault()
       if (!image) {
         toast.error('Please upload course thumbnail')
+        return
       }
 
       const courseData = {
@@ -152,7 +158,17 @@ const AddCourse = () => {
         </div>
         
         <div className='flex flex-col gap-1'>
-          <p>Mô tả khóa học</p>
+          <div className='flex items-center justify-between'>
+            <p>Mô tả khóa học</p>
+            <AIDescriptionGenerator 
+              currentTitle={courseTitle}
+              onGenerate={(description) => {
+                if (quillRef.current) {
+                  quillRef.current.root.innerHTML = description
+                }
+              }}
+            />
+          </div>
           <div ref={editorRef} className='border border-gray-500 rounded'></div>
         </div>
 

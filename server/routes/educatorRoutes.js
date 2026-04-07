@@ -19,13 +19,14 @@ const educatorRouter = express.Router()
 
 // Educator Application Routes (requires auth but not educator role)
 educatorRouter.post('/apply', 
+  requireAuth,
   upload.fields([
     { name: 'cv', maxCount: 1 },
     { name: 'certificates', maxCount: 5 }
   ]), 
   submitEducatorApplication
 )
-educatorRouter.get('/application-status', getApplicationStatus)
+educatorRouter.get('/application-status', requireAuth, getApplicationStatus)
 
 // Legacy route - now redirects to apply
 educatorRouter.get('/update-role', updateRoleEducator)
