@@ -164,7 +164,8 @@ const AddCourse = () => {
               currentTitle={courseTitle}
               onGenerate={(description) => {
                 if (quillRef.current) {
-                  quillRef.current.root.innerHTML = description
+                  quillRef.current.setContents([])
+                  quillRef.current.clipboard.dangerouslyPasteHTML(description)
                 }
               }}
             />

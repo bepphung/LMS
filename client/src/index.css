@@ -71,3 +71,96 @@
 
 .rich-text li { margin-bottom: 8px; }
 
+.ai-rich-text,
+.ai-chat-rich-text {
+  color: #374151;
+  line-height: 1.7;
+}
+
+.ai-rich-text p,
+.ai-chat-rich-text p {
+  margin: 0 0 10px;
+}
+
+.ai-rich-text h1,
+.ai-chat-rich-text h1,
+.ai-rich-text h2,
+.ai-chat-rich-text h2,
+.ai-rich-text h3,
+.ai-chat-rich-text h3,
+.ai-rich-text h4,
+.ai-chat-rich-text h4 {
+  color: #111827;
+  font-weight: 700;
+  margin: 10px 0 8px;
+}
+
+.ai-rich-text h1,
+.ai-chat-rich-text h1 {
+  font-size: 22px;
+}
+
+.ai-rich-text h2,
+.ai-chat-rich-text h2 {
+  font-size: 20px;
+}
+
+.ai-rich-text h3,
+.ai-chat-rich-text h3 {
+  font-size: 18px;
+}
+
+.ai-rich-text h4,
+.ai-chat-rich-text h4 {
+  font-size: 16px;
+}
+
+.ai-rich-text ul,
+.ai-chat-rich-text ul,
+.ai-rich-text ol,
+.ai-chat-rich-text ol {
+  margin: 8px 0 12px 20px;
+}
+
+.ai-rich-text ul,
+.ai-chat-rich-text ul {
+  list-style: disc;
+}
+
+.ai-rich-text ol,
+.ai-chat-rich-text ol {
+  list-style: decimal;
+}
+
+.ai-rich-text li,
+.ai-chat-rich-text li {
+  margin-bottom: 6px;
+}
+
+.ai-rich-text pre,
+.ai-chat-rich-text pre {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e5e7eb;
+  overflow-x: auto;
+  font-size: 13px;
+}
+
+.ai-rich-text code,
+.ai-chat-rich-text code {
+  background: #eef2ff;
+  color: #1e3a8a;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 13px;
+}
+
+.ai-rich-text pre code,
+.ai-chat-rich-text pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+

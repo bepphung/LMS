@@ -14,7 +14,7 @@ import { AILessonSummary, AIQuizGenerator } from '../../components/student/AIToo
 
 const Player = () => {
 
-  const { enrolledCourses, calculateChapterTime, backendUrl, getToken, userData, fetchUserEnrolledCourses } = useContext(AppContext)
+  const { enrolledCourses, calculateChapterTime, backendUrl, getToken, userData, fetchUserEnrolledCourses, fetchAllCourses } = useContext(AppContext)
 
   const { courseId } = useParams()
   const [courseData, setCourseData] = useState(null)
@@ -29,6 +29,52 @@ const Player = () => {
   const [showAIQuiz, setShowAIQuiz] = useState(false)
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0)
   const [currentLectureIndex, setCurrentLectureIndex] = useState(0)
+
+  const extractYouTubeVideoId = (url = '') => {
+    const normalized = String(url).trim()
+    if (!normalized) return ''
+
+    if (/^[a-zA-Z0-9_-]{11}$/.test(normalized)) {
+      return normalized
+    }
+
+    try {
+      const parsed = new URL(normalized)
+      const host = parsed.hostname.replace('www.', '')
+
+      if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+        return (
+          parsed.searchParams.get('v')
+          || parsed.pathname.split('/').filter(Boolean).pop()
+          || ''
+        )
+      }
+
+      if (host === 'youtu.be' || host === 'youtube-nocookie.com') {
+        return parsed.pathname.split('/').filter(Boolean)[0] || ''
+      }
+    } catch {
+      return normalized.split('/').pop()?.split('?')[0] || ''
+    }
+
+    return ''
+  }
+
+  const handleSelectLecture = (lecture, chapterIndex, lectureIndex) => {
+    const videoId = extractYouTubeVideoId(lecture.lectureUrl)
+    if (!videoId) {
+      toast.error('Liên kết bài giảng không hợp lệ')
+      return
+    }
+
+    setPlayerData({
+      ...lecture,
+      chapter: chapterIndex + 1,
+      lecture: lectureIndex + 1,
+      videoId,
+      instanceKey: `${lecture.lectureId}-${videoId}`
+    })
+  }
 
   const getCourseData = () => {
     enrolledCourses.map((course) => {
@@ -111,6 +157,7 @@ const Player = () => {
       if (data.success) {
         toast.success(data.message)
         fetchUserEnrolledCourses()
+        fetchAllCourses()
       } else {
         toast.error(data.message)
       }
@@ -124,11 +171,11 @@ const Player = () => {
   }, [])
 
   return courseData ? (
-    <>
-      <div className='p-4 sm:p-10 flex flex-col-reverse md:grid md:grid-cols-2 gap-10 md:px-36'>
+    <div className='min-h-[calc(100vh-72px)] flex flex-col'>
+      <div className='p-4 sm:p-10 flex-1 flex flex-col-reverse md:grid md:grid-cols-2 gap-10 md:px-36'>
         {/* left column */}
         <div className='text-gray-800'>
-          <h2 className='text-xl font-semibold'>Course Structure</h2>
+          <h2 className='text-xl font-semibold'>Cấu trúc khóa học</h2>
 
           <div className='pt-5'>
             {courseData && courseData.courseContent.map((chapter, index) => (
@@ -146,7 +193,7 @@ const Player = () => {
                     <p className='font-medium md:text-base text-sm'>{chapter.chapterTitle}</p>
                   </div>
                   <p className='text-sm md:text-default'>
-                    {chapter.chapterContent.length} lectures - {calculateChapterTime(chapter)}
+                    {chapter.chapterContent.length} bài giảng - {calculateChapterTime(chapter)}
                   </p>
                 </div>
                 <div
@@ -161,14 +208,10 @@ const Player = () => {
                           <div className='flex gap-2'>
                             {lecture.lectureUrl && (
                               <p
-                                onClick={() =>
-                                  setPlayerData({
-                                    ...lecture, chapter: index + 1, lecture: i + 1
-                                  })
-                                }
+                                onClick={() => handleSelectLecture(lecture, index, i)}
                                 className='text-blue-500 cursor-pointer'
                               >
-                                Watch
+                                Xem
                               </p>
                             )}
                             <p>{humanizeDuration(lecture.lectureDuration * 60 * 1000, { units: ['h', 'm'] })}</p>
@@ -183,7 +226,7 @@ const Player = () => {
           </div>
 
           <div className='flex items-center gap-2 py-3 mt-10'>
-            <h1 className='text-xl font-bold'>Rate this courses:</h1>
+            <h1 className='text-xl font-bold'>Đánh giá khóa học:</h1>
             <Rating initialRating={initialRating} onRate={handleRate} />
           </div>
         </div>
@@ -191,14 +234,14 @@ const Player = () => {
         <div className='md:mt-10'>
           { playerData ? (
             <div>
-              <Youtube videoId={playerData.lectureUrl.split('/').pop()}  iframeClassName='w-full aspect-video'/>
+              <Youtube key={playerData.instanceKey} videoId={playerData.videoId} iframeClassName='w-full aspect-video'/>
               <div className='flex justify-between items-center mt-1'>
                 <p>{playerData.chapter}.{playerData.lecture} {playerData.lectureTitle}</p>
-                <button onClick={() => markLectureAsCompleted(playerData.lectureId)} className='text-blue-600'>{progressData && progressData.lectureCompleted.includes(playerData.lectureId) ? 'Completed' : 'Mark as Completed'}</button>
+                <button onClick={() => markLectureAsCompleted(playerData.lectureId)} className='text-blue-600'>{progressData && progressData.lectureCompleted.includes(playerData.lectureId) ? 'Đã hoàn thành' : 'Đánh dấu đã hoàn thành'}</button>
               </div>
               
               {/* AI Tools Bar */}
-              <div className='flex flex-wrap gap-2 mt-4 p-4 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border'>
+              <div className='flex flex-wrap gap-2 mt-4 p-4 bg-linear-to-r from-gray-50 to-blue-50 rounded-xl border'>
                 <span className='text-sm text-gray-500 w-full mb-2'>Công cụ AI:</span>
                 <button
                   onClick={() => {
@@ -223,7 +266,7 @@ const Player = () => {
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
-                  Làm Quiz
+                  Luyện tập câu hỏi
                 </button>
                 <button
                   onClick={() => setShowAIChat(true)}
@@ -275,7 +318,7 @@ const Player = () => {
       {!showAIChat && <AIFloatingButton onClick={() => setShowAIChat(true)} />}
       
       <Footer />
-    </>
+    </div>
   ) : <Loading />
 }
 

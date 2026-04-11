@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useContext } from 'react'
 import { AppContext } from '../../context/AppContext'
 import axios from 'axios'
+import { formatAiTextToHtml } from './aiTextFormatter'
 
 const AIChatbot = ({ courseId, lessonContext, isOpen, onClose }) => {
   const { backendUrl, getToken } = useContext(AppContext)
@@ -69,9 +70,9 @@ const AIChatbot = ({ courseId, lessonContext, isOpen, onClose }) => {
   if (!isOpen) return null
 
   return (
-    <div className='fixed bottom-4 right-4 w-96 h-[600px] bg-white rounded-2xl shadow-2xl flex flex-col z-50 border overflow-hidden'>
+    <div className='fixed bottom-4 right-4 w-96 h-150 bg-white rounded-2xl shadow-2xl flex flex-col z-50 border overflow-hidden'>
       {/* Header */}
-      <div className='bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 flex items-center justify-between'>
+      <div className='bg-linear-to-r from-blue-600 to-blue-700 text-white p-4 flex items-center justify-between'>
         <div className='flex items-center gap-3'>
           <div className='w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center'>
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,7 +106,14 @@ const AIChatbot = ({ courseId, lessonContext, isOpen, onClose }) => {
                 ? 'bg-blue-600 text-white rounded-br-md' 
                 : 'bg-white text-gray-800 shadow-sm border rounded-bl-md'
             }`}>
-              <p className='text-sm whitespace-pre-wrap'>{msg.content}</p>
+              {msg.role === 'assistant' ? (
+                <div
+                  className='ai-chat-rich-text text-sm'
+                  dangerouslySetInnerHTML={{ __html: formatAiTextToHtml(msg.content) }}
+                />
+              ) : (
+                <p className='text-sm whitespace-pre-wrap'>{msg.content}</p>
+              )}
             </div>
           </div>
         ))}
@@ -170,7 +178,7 @@ export const AIFloatingButton = ({ onClick }) => {
   return (
     <button
       onClick={onClick}
-      className='fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center z-40 transition-all hover:scale-105'
+      className='fixed bottom-6 right-6 w-14 h-14 bg-linear-to-r from-blue-600 to-blue-700 text-white rounded-full shadow-lg hover:shadow-xl flex items-center justify-center z-40 transition-all hover:scale-105'
       title='Trợ lý AI'
     >
       <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">

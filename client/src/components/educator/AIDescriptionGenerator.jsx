@@ -33,7 +33,13 @@ const AIDescriptionGenerator = ({ onGenerate, currentTitle }) => {
       })
 
       if (data.success) {
-        onGenerate(data.description)
+        const description = typeof data.description === 'string' ? data.description.trim() : ''
+        if (!description) {
+          toast.error('AI không tạo được mô tả hợp lệ, vui lòng thử lại')
+          return
+        }
+
+        onGenerate(description)
         setIsOpen(false)
         toast.success('Đã tạo mô tả thành công!')
       } else {

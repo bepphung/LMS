@@ -7,7 +7,8 @@ import { toast } from 'react-toastify'
 
 const StudentsEnrolled = () => {
 
-  const { backendUrl, getToken, isEducator } = useContext(AppContext)
+  const { backendUrl, getToken, isEducator, userData } = useContext(AppContext)
+  const hasEducatorAccess = Boolean(isEducator || userData?.role === 'educator' || userData?.role === 'admin')
 
   const [enrolledStudents, setEnrolledStudents] = useState(null)
   
@@ -30,10 +31,10 @@ const StudentsEnrolled = () => {
   }
 
   useEffect(() => {
-    if (isEducator) {
+    if (hasEducatorAccess) {
       fetchEnrolledStudents()
     }  
-  }, [isEducator])
+  }, [hasEducatorAccess])
 
   return enrolledStudents ? (
     <div className='min-h-screen flex flex-col items-start justify-between md:p-8 md:pb-0 p-4 pt-8 pb-0'>

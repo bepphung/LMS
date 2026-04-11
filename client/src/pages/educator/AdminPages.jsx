@@ -398,6 +398,40 @@ export const AdminApplications = () => {
     }
   }
 
+  const handleDownloadCv = async (appId) => {
+    try {
+      const token = await getToken()
+      const response = await axios.get(`${backendUrl}/api/admin/applications/${appId}/cv-download`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      })
+
+      const contentDisposition = response.headers?.['content-disposition'] || ''
+      const fileNameFromHeaderMatch = contentDisposition.match(/filename="?([^";]+)"?/i)
+      const fileNameFromHeader = fileNameFromHeaderMatch?.[1]
+
+      const mimeType = response.data?.type || ''
+      const extensionByMime = mimeType.includes('pdf')
+        ? 'pdf'
+        : mimeType.includes('wordprocessingml')
+          ? 'docx'
+          : mimeType.includes('msword')
+            ? 'doc'
+            : 'pdf'
+
+      const objectUrl = window.URL.createObjectURL(new Blob([response.data]))
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = fileNameFromHeader || `cv-${appId}.${extensionByMime}`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(objectUrl)
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể tải CV')
+    }
+  }
+
   if (loading) return <Loading />
 
   return (
@@ -582,16 +616,16 @@ export const AdminApplications = () => {
                   <h3 className='font-semibold text-gray-800 mb-3'>Tài liệu đính kèm</h3>
                   <div className='flex flex-wrap gap-2'>
                     {selectedApp.cvUrl && (
-                      <a 
-                        href={selectedApp.cvUrl} 
-                        target='_blank'
+                      <button
+                        type='button'
+                        onClick={() => handleDownloadCv(selectedApp._id)}
                         className='inline-flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors'
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        CV
-                      </a>
+                        Tải CV
+                      </button>
                     )}
                     {selectedApp.certificatesUrl?.map((url, idx) => (
                       <a 
@@ -705,13 +739,31 @@ export const AdminUsers = () => {
     fetchUsers()
   }, [filter])
 
-  const handleRoleChange = async (userId, newRole) => {
-    if (!confirm(`Bạn có chắc muốn thay đổi vai trò người dùng này thành ${newRole}?`)) return
+  const handleUnbanUser = async (userId, userName) => {
+    if (!confirm(`Bạn có chắc muốn bỏ cấm tài khoản "${userName}"?`)) return
+
+    try {
+      const token = await getToken()
+      const { data } = await axios.patch(`${backendUrl}/api/admin/users/${userId}/unban`, 
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+      if (data.success) {
+        toast.success(data.message)
+        fetchUsers()
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message)
+    }
+  }
+
+  const handleBanUser = async (userId, userName) => {
+    if (!confirm(`Bạn có chắc muốn cấm tài khoản "${userName}"?`)) return
     
     try {
       const token = await getToken()
-      const { data } = await axios.patch(`${backendUrl}/api/admin/users/${userId}/role`, 
-        { role: newRole },
+      const { data } = await axios.patch(`${backendUrl}/api/admin/users/${userId}/ban`, 
+        {},
         { headers: { Authorization: `Bearer ${token}` } }
       )
       if (data.success) {
@@ -780,6 +832,7 @@ export const AdminUsers = () => {
               <th className='px-4 py-3 text-left text-sm font-medium text-gray-600'>Người dùng</th>
               <th className='px-4 py-3 text-left text-sm font-medium text-gray-600'>Email</th>
               <th className='px-4 py-3 text-left text-sm font-medium text-gray-600'>Vai trò</th>
+              <th className='px-4 py-3 text-left text-sm font-medium text-gray-600'>Trạng thái</th>
               <th className='px-4 py-3 text-left text-sm font-medium text-gray-600'>Ngày tham gia</th>
               <th className='px-4 py-3 text-center text-sm font-medium text-gray-600'>Thao tác</th>
             </tr>
@@ -804,25 +857,42 @@ export const AdminUsers = () => {
                      user.role === 'educator' ? 'Giảng viên' : 'Học viên'}
                   </span>
                 </td>
+                <td className='px-4 py-3'>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    user.isBanned ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
+                  }`}>
+                    {user.isBanned ? 'Đã bị cấm' : 'Đang hoạt động'}
+                  </span>
+                </td>
                 <td className='px-4 py-3 text-sm text-gray-500'>
                   {new Date(user.createdAt).toLocaleDateString('vi-VN')}
                 </td>
                 <td className='px-4 py-3 text-center'>
-                  <select
-                    value={user.role || 'student'}
-                    onChange={(e) => handleRoleChange(user._id, e.target.value)}
-                    className='text-sm border rounded px-2 py-1'
-                  >
-                    <option value='student'>Học viên</option>
-                    <option value='educator'>Giảng viên</option>
-                    <option value='admin'>Admin</option>
-                  </select>
+                  {['student', 'educator'].includes(user.role) ? (
+                    user.isBanned ? (
+                      <button
+                        onClick={() => handleUnbanUser(user._id, user.name)}
+                        className='text-sm font-medium px-3 py-1.5 rounded-lg transition-colors bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                      >
+                        Bỏ cấm
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleBanUser(user._id, user.name)}
+                        className='text-sm font-medium px-3 py-1.5 rounded-lg transition-colors bg-red-50 text-red-600 hover:bg-red-100'
+                      >
+                        Cấm tài khoản
+                      </button>
+                    )
+                  ) : (
+                    <span className='text-sm text-gray-400'>Không áp dụng</span>
+                  )}
                 </td>
               </tr>
             ))}
             {users.length === 0 && (
               <tr>
-                <td colSpan={5} className='px-4 py-8 text-center text-gray-500'>
+                <td colSpan={6} className='px-4 py-8 text-center text-gray-500'>
                   Không tìm thấy người dùng
                 </td>
               </tr>
@@ -873,6 +943,29 @@ export const AdminCourses = () => {
       if (data.success) {
         toast.success(data.message)
         setCourses(courses.filter(c => c._id !== courseId))
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || error.message)
+    }
+  }
+
+  const handleToggleVisibility = async (courseId, isPublished, courseTitle) => {
+    const actionLabel = isPublished ? 'ẩn' : 'bỏ ẩn'
+    if (!confirm(`Bạn có chắc muốn ${actionLabel} khóa học "${courseTitle}"?`)) return
+
+    try {
+      const token = await getToken()
+      const { data } = await axios.patch(
+        `${backendUrl}/api/admin/courses/${courseId}/toggle-visibility`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
+
+      if (data.success) {
+        toast.success(data.message)
+        setCourses(prev => prev.map(course => (
+          course._id === courseId ? { ...course, isPublished: data.isPublished } : course
+        )))
       }
     } catch (error) {
       toast.error(error.response?.data?.message || error.message)
@@ -983,12 +1076,20 @@ export const AdminCourses = () => {
                   </span>
                 </td>
                 <td className='px-4 py-3 text-center'>
-                  <button
-                    onClick={() => handleDelete(course._id, course.courseTitle)}
-                    className='text-red-600 hover:text-red-700 text-sm font-medium'
-                  >
-                    Xóa
-                  </button>
+                  <div className='flex items-center justify-center gap-3'>
+                    <button
+                      onClick={() => handleToggleVisibility(course._id, course.isPublished, course.courseTitle)}
+                      className='text-sm font-medium text-amber-600 hover:text-amber-700'
+                    >
+                      {course.isPublished ? 'Ẩn' : 'Bỏ ẩn'}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(course._id, course.courseTitle)}
+                      className='text-red-600 hover:text-red-700 text-sm font-medium'
+                    >
+                      Xóa
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

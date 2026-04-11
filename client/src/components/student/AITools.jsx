@@ -2,6 +2,7 @@ import React, { useState, useContext } from 'react'
 import { AppContext } from '../../context/AppContext'
 import axios from 'axios'
 import { toast } from 'react-toastify'
+import { formatAiTextToHtml } from './aiTextFormatter'
 
 // Lesson Summary Component
 export const AILessonSummary = ({ courseId, chapterIndex, lectureIndex, onClose }) => {
@@ -36,7 +37,7 @@ export const AILessonSummary = ({ courseId, chapterIndex, lectureIndex, onClose 
   return (
     <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4'>
       <div className='bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden'>
-        <div className='p-6 border-b bg-gradient-to-r from-purple-600 to-purple-700 text-white'>
+        <div className='p-6 border-b bg-linear-to-r from-purple-600 to-purple-700 text-white'>
           <div className='flex items-center justify-between'>
             <div className='flex items-center gap-3'>
               <div className='w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center'>
@@ -84,13 +85,13 @@ export const AILessonSummary = ({ courseId, chapterIndex, lectureIndex, onClose 
           )}
           
           {summary && (
-            <div className='prose prose-purple max-w-none'>
+            <div className='ai-rich-text'>
               <h4 className='text-lg font-semibold text-gray-800 mb-4'>
                 {summary.chapterTitle} - {summary.lectureTitle}
               </h4>
               <div 
                 className='text-gray-700 leading-relaxed'
-                dangerouslySetInnerHTML={{ __html: summary.summary.replace(/\n/g, '<br/>') }}
+                dangerouslySetInnerHTML={{ __html: formatAiTextToHtml(summary.summary) }}
               />
             </div>
           )}
@@ -157,10 +158,52 @@ export const AIQuizGenerator = ({ courseId, chapterIndex, onClose }) => {
     setSubmitted(true)
   }
 
+  const downloadQuizResult = () => {
+    if (!submitted || !quiz || !score) return
+
+    const timestamp = new Date().toLocaleString('vi-VN')
+    const rows = []
+
+    rows.push('KET QUA LUYEN TAP CAU HOI')
+    rows.push(`Thoi gian: ${timestamp}`)
+    rows.push(`Tong diem: ${score.correct}/${score.total}`)
+    rows.push('')
+
+    quiz.forEach((q, qIdx) => {
+      const selectedIndex = answers[qIdx]
+      const selectedText = selectedIndex !== undefined ? q.options[selectedIndex] : 'Chua tra loi'
+      const correctText = q.options[q.correctAnswer]
+      const isCorrect = selectedIndex === q.correctAnswer
+
+      rows.push(`Cau ${qIdx + 1}: ${q.question}`)
+      q.options.forEach((opt, oIdx) => {
+        rows.push(`  ${oIdx + 1}. ${opt}`)
+      })
+      rows.push(`Tra loi cua ban: ${selectedText}`)
+      rows.push(`Dap an dung: ${correctText}`)
+      rows.push(`Ket qua: ${isCorrect ? 'Dung' : 'Sai'}`)
+      if (q.explanation) {
+        rows.push(`Giai thich: ${q.explanation}`)
+      }
+      rows.push('')
+    })
+
+    const fileContent = rows.join('\n')
+    const blob = new Blob([fileContent], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `ket-qua-quiz-chuong-${chapterIndex + 1}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4'>
       <div className='bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden'>
-        <div className='p-6 border-b bg-gradient-to-r from-green-600 to-emerald-600 text-white'>
+        <div className='p-6 border-b bg-linear-to-r from-green-600 to-emerald-600 text-white'>
           <div className='flex items-center justify-between'>
             <div className='flex items-center gap-3'>
               <div className='w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center'>
@@ -280,12 +323,20 @@ export const AIQuizGenerator = ({ courseId, chapterIndex, onClose }) => {
                     Nộp bài
                   </button>
                 ) : (
-                  <button
-                    onClick={generateQuiz}
-                    className='bg-blue-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-blue-700 transition-colors'
-                  >
-                    Tạo Quiz mới
-                  </button>
+                  <>
+                    <button
+                      onClick={downloadQuizResult}
+                      className='bg-emerald-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-emerald-700 transition-colors'
+                    >
+                      Tải kết quả
+                    </button>
+                    <button
+                      onClick={generateQuiz}
+                      className='bg-blue-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-blue-700 transition-colors'
+                    >
+                      Tạo Quiz mới
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -326,7 +377,7 @@ export const AICourseRecommendations = ({ onClose }) => {
   return (
     <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4'>
       <div className='bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden'>
-        <div className='p-6 border-b bg-gradient-to-r from-orange-500 to-amber-500 text-white'>
+        <div className='p-6 border-b bg-linear-to-r from-orange-500 to-amber-500 text-white'>
           <div className='flex items-center justify-between'>
             <div className='flex items-center gap-3'>
               <div className='w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center'>

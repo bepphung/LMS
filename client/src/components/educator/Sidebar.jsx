@@ -2,10 +2,19 @@ import React, { useContext } from 'react'
 import { assets } from '../../assets/assets'
 import { AppContext } from '../../context/AppContext'
 import { NavLink } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
 
 const Sidebar = () => {
 
-  const { isEducator } = useContext(AppContext)
+  const { isEducator, userData } = useContext(AppContext)
+  const { user } = useUser()
+  const hasEducatorAccess = Boolean(
+    isEducator ||
+    userData?.role === 'educator' ||
+    userData?.role === 'admin' ||
+    user?.publicMetadata?.role === 'educator' ||
+    user?.publicMetadata?.role === 'admin'
+  )
 
   const menuItems = [
     { name: 'Dashboard', path: '/educator', icon: assets.home_icon},
@@ -14,7 +23,7 @@ const Sidebar = () => {
     { name: 'Học viên đã đăng ký', path: '/educator/student-enrolled', icon: assets.person_tick_icon}
   ]
 
-  return isEducator &&  (
+  return hasEducatorAccess &&  (
     <div className='md:w-64 w-16 border-r min-h-screen text-base border-gray-500 py-2 flex flex-col'>
       {menuItems.map((item) => (
         <NavLink

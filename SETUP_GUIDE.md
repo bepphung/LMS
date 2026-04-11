@@ -9,9 +9,10 @@ cd server
 npm install
 ```
 
-## 2. Cấu hình Email SMTP
+## 2. Cấu hình Email SMTP (Tùy chọn)
 
-Để gửi email thông báo khi duyệt/từ chối giảng viên, bạn cần cấu hình SMTP.
+Luồng duyệt/từ chối đăng ký giảng viên hiện đã hiển thị trạng thái trực tiếp trong hệ thống, không còn phụ thuộc email.
+Bạn chỉ cần cấu hình SMTP nếu muốn dùng cho các tính năng gửi email khác.
 
 ### Sử dụng Gmail:
 
@@ -56,6 +57,33 @@ Hệ thống hỗ trợ các tính năng AI như:
    ```
 
 > **Lưu ý:** Nếu không cấu hình API key, các tính năng AI sẽ hiển thị thông báo lỗi.
+
+## 3.1 Cấu hình Cloudinary (Bắt buộc nếu upload ảnh/file)
+
+Lỗi `Must supply api_key` nghĩa là Vercel/local đang thiếu biến môi trường Cloudinary.
+
+Bạn có thể dùng 1 trong 2 chuẩn tên biến:
+
+```env
+# Chuẩn A (project hiện tại)
+CLOUDINARY_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_SECRET_KEY=...
+```
+
+hoặc
+
+```env
+# Chuẩn B (tên từ dashboard Cloudinary)
+CLOUDINARY_CLOUD_NAME=...
+CLOUDINARY_API_KEY=...
+CLOUDINARY_API_SECRET=...
+```
+
+Sau khi thêm trên Vercel:
+1. Vào Project Settings → Environment Variables
+2. Add đủ 3 biến
+3. Redeploy project (quan trọng)
 
 ## 4. Tạo Admin User Đầu Tiên
 
@@ -164,3 +192,48 @@ npm run dev
 - Kiểm tra đã thêm OPENAI_API_KEY hoặc GEMINI_API_KEY vào .env
 - Restart server sau khi thêm API key
 - Kiểm tra API key còn credit/quota
+
+
+Để test thanh toán Stripe cho project LMS của bạn, làm theo đúng luồng này là chắc nhất:
+
+Dùng key test, không dùng key live
+Trong file env server:
+STRIPE_PUBLISHABLE_KEY = pk_test_...
+STRIPE_SECRET_KEY = sk_test_...
+Đảm bảo frontend cũng đang dùng publishable key test.
+Chạy server và client
+Server: npm run server
+Client: npm run dev
+Bắt buộc có webhook thì mới ghi nhận đã mua
+Vì code hiện tại chỉ cộng khóa học cho user khi nhận sự kiện payment_intent.succeeded ở endpoint /stripe.
+Cách dễ nhất khi chạy local:
+
+Cài Stripe CLI
+Chạy:
+stripe listen --forward-to localhost:5000/stripe
+Lấy webhook signing secret mới mà Stripe CLI in ra (dạng whsec_...) và gán vào:
+STRIPE_WEBHOOK_SECRET = whsec_...
+Restart server sau khi đổi env.
+Tạo giao dịch test từ UI
+Đăng nhập user học viên
+Mở trang chi tiết khóa học
+Bấm Đăng ký ngay
+Stripe Checkout mở ra như ảnh bạn gửi.
+Dùng thẻ test để mô phỏng
+Thành công:
+4242 4242 4242 4242
+MM/YY bất kỳ tương lai, CVC bất kỳ, ZIP bất kỳ
+Thất bại:
+4000 0000 0000 0002
+3D Secure:
+4000 0025 0000 3155
+Kiểm tra kết quả sau thanh toán
+Thành công thì phải tự về trang my-enrollments
+Trong DB:
+purchase.status chuyển thành completed
+user.enrolledCourses có course mới
+course.enrolledStudents có user mới
+Nếu thanh toán thành công nhưng chưa vào khóa học
+90% là webhook chưa nhận được hoặc sai STRIPE_WEBHOOK_SECRET.
+Kiểm tra log server có dòng Payment succeeded for purchase không.
+Nếu không có, kiểm tra lại bước stripe listen và secret whsec.

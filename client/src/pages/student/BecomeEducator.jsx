@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import { useUser, SignInButton } from '@clerk/clerk-react'
 import { AppContext } from '../../context/AppContext'
 import axios from 'axios'
@@ -7,8 +7,8 @@ import Loading from '../../components/student/Loading'
 import Footer from '../../components/student/Footer'
 
 const BecomeEducator = () => {
-  const { backendUrl, getToken, userData, navigate, isEducator } = useContext(AppContext)
-  const { isSignedIn, isLoaded } = useUser()
+  const { backendUrl, getToken, userData, navigate } = useContext(AppContext)
+  const { isSignedIn, isLoaded, user } = useUser()
   
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -32,6 +32,7 @@ const BecomeEducator = () => {
     cv: null,
     certificates: []
   })
+  const certificateInputRef = useRef(null)
 
   // Check existing application status
   useEffect(() => {
@@ -58,13 +59,6 @@ const BecomeEducator = () => {
     checkApplicationStatus()
   }, [userData])
 
-  // Redirect if already educator
-  useEffect(() => {
-    if (isEducator) {
-      navigate('/educator')
-    }
-  }, [isEducator])
-
   // Pre-fill user data
   useEffect(() => {
     if (userData) {
@@ -86,8 +80,30 @@ const BecomeEducator = () => {
     if (name === 'cv') {
       setFiles(prev => ({ ...prev, cv: selectedFiles[0] }))
     } else if (name === 'certificates') {
-      setFiles(prev => ({ ...prev, certificates: Array.from(selectedFiles) }))
+      const incomingFile = selectedFiles?.[0]
+      if (!incomingFile) return
+
+      setFiles(prev => {
+        const merged = [...prev.certificates, incomingFile]
+        if (merged.length > 5) {
+          toast.warning('Bạn chỉ có thể tải lên tối đa 5 chứng chỉ')
+        }
+        return { ...prev, certificates: merged.slice(0, 5) }
+      })
+      // Allow selecting the same file again in subsequent picks.
+      e.target.value = ''
     }
+  }
+
+  const removeCertificate = (indexToRemove) => {
+    setFiles(prev => ({
+      ...prev,
+      certificates: prev.certificates.filter((_, index) => index !== indexToRemove)
+    }))
+  }
+
+  const openCertificatePicker = () => {
+    certificateInputRef.current?.click()
   }
 
   const handleSubmit = async (e) => {
@@ -201,7 +217,7 @@ const BecomeEducator = () => {
                   <h2 className="text-2xl font-bold text-gray-800 mb-3">Đơn đang được xét duyệt</h2>
                   <p className="text-gray-600 mb-6 max-w-md mx-auto">
                     Đơn đăng ký của bạn đã được gửi thành công và đang chờ admin xem xét.
-                    Chúng tôi sẽ gửi email thông báo kết quả cho bạn.
+                    Vui lòng chờ trong khi hệ thống xử lý đơn của bạn.
                   </p>
                   
                   {/* Status Info Card */}
@@ -565,17 +581,49 @@ const BecomeEducator = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Chứng chỉ (có thể chọn nhiều)
+                    Chứng chỉ (chọn từng ảnh)
                   </label>
-                  <input
-                    type="file"
-                    name="certificates"
-                    onChange={handleFileChange}
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    multiple
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p className="mt-1 text-xs text-gray-500">PDF, JPG, PNG (Max 5 files)</p>
+                  <div className="border border-gray-300 rounded-lg p-3 bg-gray-50">
+                    <input
+                      ref={certificateInputRef}
+                      type="file"
+                      name="certificates"
+                      onChange={handleFileChange}
+                      accept=".jpg,.jpeg,.png,.webp"
+                      className="hidden"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={openCertificatePicker}
+                      disabled={files.certificates.length >= 5}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-blue-200 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Thêm ảnh chứng chỉ
+                    </button>
+
+                    <p className="mt-2 text-xs text-gray-500">Mỗi lần chọn 1 ảnh, tối đa 5 ảnh (JPG, PNG, WEBP).</p>
+
+                    {files.certificates.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {files.certificates.map((certificate, index) => (
+                          <div key={`${certificate.name}-${index}`} className="flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3 py-2">
+                            <span className="text-sm text-gray-700 truncate pr-3">{index + 1}. {certificate.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeCertificate(index)}
+                              className="text-red-600 hover:text-red-700 text-sm font-medium"
+                            >
+                              Gỡ
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

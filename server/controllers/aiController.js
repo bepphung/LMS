@@ -13,6 +13,106 @@ const AI_CONFIG = {
   useGemini: !!process.env.GEMINI_API_KEY
 }
 
+const GEMINI_DEFAULT_MODELS = [
+  'gemini-1.5-flash',
+  'gemini-1.5-pro',
+  'gemini-2.0-flash',
+  'gemini-3-flash-preview'
+]
+
+const GEMINI_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GEMINI_RETRY_ATTEMPTS || 3))
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+const isGeminiTransientError = ({ status = '', message = '' } = {}) => {
+  const normalizedStatus = String(status).toUpperCase()
+  const normalizedMessage = String(message).toLowerCase()
+
+  return [
+    'RESOURCE_EXHAUSTED',
+    'UNAVAILABLE',
+    'DEADLINE_EXCEEDED',
+    'INTERNAL'
+  ].includes(normalizedStatus)
+    || normalizedMessage.includes('high demand')
+    || normalizedMessage.includes('try again later')
+    || normalizedMessage.includes('temporar')
+    || normalizedMessage.includes('resource_exhausted')
+}
+
+const getGeminiModels = () => {
+  const configured = process.env.GEMINI_MODEL
+  if (!configured) return GEMINI_DEFAULT_MODELS
+
+  return configured
+    .split(',')
+    .map(m => m.trim())
+    .filter(Boolean)
+}
+
+const callGemini = async (prompt, systemPrompt = '') => {
+  const models = getGeminiModels()
+  let lastErrorMessage = 'Unknown Gemini error'
+  let encounteredTransientError = false
+
+  for (const model of models) {
+    for (let attempt = 1; attempt <= GEMINI_RETRY_ATTEMPTS; attempt += 1) {
+      let data
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [{ text: `${systemPrompt}\n\n${prompt}` }]
+              }]
+            })
+          }
+        )
+        data = await response.json()
+      } catch (networkError) {
+        data = {
+          error: {
+            status: 'UNAVAILABLE',
+            message: networkError.message || 'Gemini network error'
+          }
+        }
+      }
+
+      if (!data.error && data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        return data.candidates[0].content.parts[0].text
+      }
+
+      const currentError = {
+        status: data?.error?.status,
+        message: data?.error?.message || `Gemini model ${model} failed`
+      }
+      lastErrorMessage = currentError.message
+
+      const isTransient = isGeminiTransientError(currentError)
+      if (isTransient) {
+        encounteredTransientError = true
+      }
+
+      if (!isTransient || attempt === GEMINI_RETRY_ATTEMPTS) {
+        break
+      }
+
+      // Exponential backoff: 800ms, 1600ms, 3200ms...
+      const backoffMs = 800 * (2 ** (attempt - 1))
+      await sleep(backoffMs)
+    }
+  }
+
+  if (encounteredTransientError) {
+    throw new Error('AI đang quá tải tạm thời, vui lòng thử lại sau vài giây.')
+  }
+
+  throw new Error(lastErrorMessage)
+}
+
 // Helper function to call AI API
 const callAI = async (prompt, systemPrompt = '') => {
   // If OpenAI key is available
@@ -40,18 +140,7 @@ const callAI = async (prompt, systemPrompt = '') => {
   
   // If Gemini key is available
   if (AI_CONFIG.useGemini) {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: `${systemPrompt}\n\n${prompt}` }]
-        }]
-      })
-    })
-    const data = await response.json()
-    if (data.error) throw new Error(data.error.message)
-    return data.candidates[0].content.parts[0].text
+    return await callGemini(prompt, systemPrompt)
   }
   
   throw new Error('No AI API key configured. Please add OPENAI_API_KEY or GEMINI_API_KEY to .env')
@@ -60,6 +149,51 @@ const callAI = async (prompt, systemPrompt = '') => {
 const parseJSONFromAI = (rawText) => {
   const cleaned = rawText.replace(/```json\n?|```/g, '').trim()
   return JSON.parse(cleaned)
+}
+
+const stripHtmlTags = (html = '') => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+
+const sanitizeHtml = (html = '') => {
+  let cleaned = html
+    .replace(/```html\n?|```/gi, '')
+    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+    .trim()
+
+  const firstTagIndex = cleaned.search(/<[^>]+>/)
+  if (firstTagIndex >= 0) {
+    const lastTagEnd = cleaned.lastIndexOf('>')
+    if (lastTagEnd > firstTagIndex) {
+      cleaned = cleaned.slice(firstTagIndex, lastTagEnd + 1)
+    }
+  }
+
+  if (!cleaned.includes('<')) {
+    cleaned = `<p>${cleaned}</p>`
+  }
+
+  return cleaned
+}
+
+const buildFallbackDescription = ({ courseTitle, topics, targetAudience, courseLevel }) => {
+  const topicsList = (topics || '')
+    .split(',')
+    .map(t => t.trim())
+    .filter(Boolean)
+    .slice(0, 5)
+
+  const topicItems = topicsList.length
+    ? topicsList.map(topic => `<li>${topic}</li>`).join('')
+    : '<li>Nội dung thực chiến, bám sát bài toán thực tế trong dự án IT</li><li>Kết hợp lý thuyết nền tảng và bài tập ứng dụng</li><li>Định hướng kỹ năng để sẵn sàng làm việc trong môi trường chuyên nghiệp</li>'
+
+  return `
+<div class="course-description">
+  <p><strong>${courseTitle}</strong> là khóa học được thiết kế ngắn gọn, thực tế và dễ tiếp cận, giúp học viên nắm chắc kiến thức cốt lõi và áp dụng ngay vào dự án. Khóa học tập trung vào tư duy giải quyết vấn đề, quy trình làm việc bài bản và kỹ năng triển khai hiệu quả trong môi trường phát triển phần mềm hiện đại.</p>
+  <ul>
+    ${topicItems}
+  </ul>
+  <p>${targetAudience ? `Phù hợp cho ${targetAudience}.` : 'Phù hợp cho sinh viên IT và người mới đi làm muốn xây nền tảng vững chắc.'} ${courseLevel ? `Mức độ: ${courseLevel}.` : ''} Sau khóa học, bạn có thể tự tin xây dựng sản phẩm chất lượng, làm việc nhóm hiệu quả và nâng cao năng lực nghề nghiệp theo lộ trình rõ ràng.</p>
+</div>`.trim()
 }
 
 // AI Chatbot - Learning Assistant
@@ -332,7 +466,10 @@ export const generateCourseDescription = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Vui lòng nhập tên khóa học' })
     }
 
-    const prompt = `Tạo mô tả khóa học hấp dẫn cho khóa học sau:
+    const prompt = `Bạn là chuyên gia viết nội dung cho nền tảng e-learning.
+Nhiệm vụ: tạo mô tả khóa học NGẮN GỌN, chuyên nghiệp, dễ đọc và đúng định dạng.
+
+Thông tin khóa học:
 
 Tên khóa học: ${courseTitle}
 ${topics ? `Các chủ đề chính: ${topics}` : ''}
@@ -340,14 +477,33 @@ ${targetAudience ? `Đối tượng học viên: ${targetAudience}` : ''}
 ${courseLevel ? `Trình độ: ${courseLevel}` : ''}
 
 Yêu cầu:
-1. Mô tả hấp dẫn, chuyên nghiệp (150-300 từ)
+1. Mô tả hấp dẫn, chuyên nghiệp (120-220 từ)
 2. Nêu rõ lợi ích khi học
 3. Liệt kê các kỹ năng sẽ đạt được
 4. Phù hợp cho nền tảng e-learning
+5. Không thêm giải thích, không markdown, không code fence, không tiêu đề ngoài nội dung mô tả
 
-Format output dưới dạng HTML với các thẻ <p>, <ul>, <li>, <strong>.`
+Trả về DUY NHẤT JSON hợp lệ theo format:
+{
+  "descriptionHtml": "<div class=\"course-description\">...</div>"
+}
 
-    const description = await callAI(prompt)
+descriptionHtml chỉ được dùng các thẻ HTML sau: <div>, <p>, <ul>, <li>, <strong>.`
+
+    const aiRaw = await callAI(prompt)
+
+    let description = ''
+    try {
+      const parsed = parseJSONFromAI(aiRaw)
+      description = sanitizeHtml(parsed?.descriptionHtml || '')
+    } catch {
+      description = sanitizeHtml(aiRaw)
+    }
+
+    const wordCount = stripHtmlTags(description).split(' ').filter(Boolean).length
+    if (wordCount < 70) {
+      description = buildFallbackDescription({ courseTitle, topics, targetAudience, courseLevel })
+    }
 
     res.json({ 
       success: true, 

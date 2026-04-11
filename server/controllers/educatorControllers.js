@@ -1,9 +1,33 @@
 import { clerkClient } from '@clerk/express'
 import { v2 as cloudinary } from 'cloudinary'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import Course from '../models/Course.js'
 import { Purchase } from '../models/Purchases.js'
 import User from '../models/User.js'
 import EducatorApplication from '../models/EducatorApplication.js'
+import { assertCloudinaryConfigured } from '../configs/cloudinary.js'
+
+const sanitizeFileName = (fileName = 'cv-file') => {
+  return fileName
+    .normalize('NFKD')
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_+/g, '_')
+}
+
+const storeCvLocally = async (cvFile) => {
+  const uploadsDir = path.join(process.cwd(), 'uploads', 'cv')
+  await fs.mkdir(uploadsDir, { recursive: true })
+
+  const originalName = cvFile.originalname || `cv-${Date.now()}.pdf`
+  const safeName = `${Date.now()}-${sanitizeFileName(originalName)}`
+  const destinationPath = path.join(uploadsDir, safeName)
+
+  await fs.copyFile(cvFile.path, destinationPath)
+  await fs.unlink(cvFile.path).catch(() => {})
+
+  return `/uploads/cv/${safeName}`
+}
 
 // Submit educator application (instead of direct role update)
 export const submitEducatorApplication = async (req, res) => {
@@ -59,17 +83,19 @@ export const submitEducatorApplication = async (req, res) => {
     let certificatesUrl = []
     
     if (req.files) {
+      if (req.files.certificates?.length) {
+        assertCloudinaryConfigured()
+      }
+
       if (req.files.cv && req.files.cv[0]) {
-        const cvUpload = await cloudinary.uploader.upload(req.files.cv[0].path, {
-          folder: 'educator-applications/cv'
-        })
-        cvUrl = cvUpload.secure_url
+        cvUrl = await storeCvLocally(req.files.cv[0])
       }
       
       if (req.files.certificates) {
         for (const cert of req.files.certificates) {
           const certUpload = await cloudinary.uploader.upload(cert.path, {
-            folder: 'educator-applications/certificates'
+            folder: 'educator-applications/certificates',
+            resource_type: 'auto'
           })
           certificatesUrl.push(certUpload.secure_url)
         }
@@ -95,7 +121,7 @@ export const submitEducatorApplication = async (req, res) => {
 
     res.json({ 
       success: true, 
-      message: 'Đơn đăng ký đã được gửi. Chúng tôi sẽ xem xét và phản hồi qua email.',
+      message: 'Đơn đăng ký đã được gửi. Vui lòng chờ admin xét duyệt.',
       application 
     })
   } catch (error) {
@@ -140,6 +166,8 @@ export const addCourse = async (req, res) => {
     if (!imageFile) {
       return res.status(400).json({ success: false, message: 'Thumbnail not attached' });
     }
+
+    assertCloudinaryConfigured()
 
     const parseCourseData = await JSON.parse(courseData)
     parseCourseData.educator = userId
@@ -186,6 +214,7 @@ export const updateCourse = async (req, res) => {
 
     // Update thumbnail if new image provided
     if (imageFile) {
+      assertCloudinaryConfigured()
       const imageUpload = await cloudinary.uploader.upload(imageFile.path)
       course.courseThumbnail = imageUpload.secure_url
     }

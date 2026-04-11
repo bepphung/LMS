@@ -20,15 +20,20 @@ const getClerkUserName = (data) => {
 export const clerkWebhooks = async (req, res) => {
   console.log('=== WEBHOOK CALLED ===');
   try {
-    const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
+    if (!process.env.CLERK_WEBHOOK_SECRET) {
+      return res.status(500).json({ success: false, message: 'Missing CLERK_WEBHOOK_SECRET' })
+    }
 
-    await whook.verify(JSON.stringify(req.body), {
+    const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
+    const payload = req.body.toString('utf8')
+
+    const evt = whook.verify(payload, {
       'svix-id': req.headers['svix-id'],
       'svix-timestamp': req.headers['svix-timestamp'],
       'svix-signature': req.headers['svix-signature']
     });
 
-    const {data, type} = req.body;
+    const {data, type} = evt;
     console.log('Webhook type:', type);
     console.log('Webhook data ID:', data?.id);
 

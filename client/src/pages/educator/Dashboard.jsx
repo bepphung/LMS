@@ -9,7 +9,8 @@ import { toast } from 'react-toastify'
 const Dashboard = () => {
 
   const [dashboardData, setDashboardData] = useState(null)
-  const { backendUrl, getToken, isEducator } = useContext(AppContext)
+  const { backendUrl, getToken, isEducator, userData } = useContext(AppContext)
+  const hasEducatorAccess = Boolean(isEducator || userData?.role === 'educator' || userData?.role === 'admin')
 
   const fetchDashboardData = async () => {
     try {
@@ -30,10 +31,10 @@ const Dashboard = () => {
   }
 
   useEffect(() => {
-    if (isEducator) {
+    if (hasEducatorAccess) {
       fetchDashboardData()
     }
-  }, [isEducator])
+  }, [hasEducatorAccess])
 
   return dashboardData ? (
     <div className='min-h-screen flex flex-col items-start justify-between gap-8 md:p-8 md:pb-9 p-4 pt-8 pb-0'>

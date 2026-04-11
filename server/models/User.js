@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema(
         ref: 'Course'
       }
     ],
+    isBanned: { type: Boolean, default: false },
   }, {timestamps: true}
 )
 

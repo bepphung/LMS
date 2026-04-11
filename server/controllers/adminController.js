@@ -1,9 +1,20 @@
 import { clerkClient } from '@clerk/express'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import User from '../models/User.js'
 import Course from '../models/Course.js'
 import { Purchase } from '../models/Purchases.js'
 import EducatorApplication from '../models/EducatorApplication.js'
-import { sendEmail } from '../configs/email.js'
+
+const getExtFromContentType = (contentType = '') => {
+  const type = contentType.toLowerCase()
+  if (type.includes('pdf')) return '.pdf'
+  if (type.includes('msword')) return '.doc'
+  if (type.includes('officedocument.wordprocessingml.document')) return '.docx'
+  if (type.includes('image/png')) return '.png'
+  if (type.includes('image/jpeg')) return '.jpg'
+  return '.bin'
+}
 
 // Get admin dashboard stats
 export const getAdminDashboard = async (req, res) => {
@@ -88,6 +99,43 @@ export const getApplicationDetails = async (req, res) => {
   }
 }
 
+// Download application CV (supports local file path and legacy remote URLs)
+export const downloadApplicationCv = async (req, res) => {
+  try {
+    const { applicationId } = req.params
+    const application = await EducatorApplication.findById(applicationId)
+
+    if (!application || !application.cvUrl) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy CV' })
+    }
+
+    // New local-storage flow
+    if (application.cvUrl.startsWith('/uploads/')) {
+      const relativePath = application.cvUrl.replace(/^\/+/, '')
+      const absolutePath = path.join(process.cwd(), relativePath)
+      await fs.access(absolutePath)
+      return res.download(absolutePath, path.basename(absolutePath))
+    }
+
+    // Legacy flow for previously uploaded remote URLs
+    const response = await fetch(application.cvUrl)
+    if (!response.ok) {
+      return res.status(404).json({ success: false, message: 'Không thể tải CV từ nguồn cũ' })
+    }
+
+    const contentType = response.headers.get('content-type') || 'application/octet-stream'
+    const ext = getExtFromContentType(contentType)
+    const buffer = Buffer.from(await response.arrayBuffer())
+    const fileName = `cv-${applicationId}${ext}`
+
+    res.setHeader('Content-Type', contentType)
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`)
+    return res.send(buffer)
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message })
+  }
+}
+
 // Approve educator application
 export const approveApplication = async (req, res) => {
   try {
@@ -120,35 +168,9 @@ export const approveApplication = async (req, res) => {
       }
     })
 
-    // Send approval email
-    try {
-      await sendEmail({
-        to: application.email,
-        subject: '🎉 Chúc mừng! Đơn đăng ký giảng viên đã được duyệt',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #2563eb;">Chúc mừng ${application.fullName}!</h1>
-            <p>Đơn đăng ký trở thành giảng viên của bạn đã được <strong style="color: #16a34a;">CHẤP THUẬN</strong>.</p>
-            <p>Bạn có thể bắt đầu tạo khóa học ngay bây giờ bằng cách:</p>
-            <ol>
-              <li>Đăng nhập vào tài khoản của bạn</li>
-              <li>Truy cập trang Giảng viên</li>
-              <li>Nhấn "Thêm khóa học" để bắt đầu</li>
-            </ol>
-            <p>Chúc bạn thành công trên hành trình giảng dạy!</p>
-            <hr style="margin: 20px 0;">
-            <p style="color: #6b7280; font-size: 14px;">Đội ngũ LMS</p>
-          </div>
-        `
-      })
-    } catch (emailError) {
-      console.error('Failed to send approval email:', emailError)
-      // Don't fail the whole operation if email fails
-    }
-
     res.json({ 
       success: true, 
-      message: 'Đơn đăng ký đã được duyệt. Email thông báo đã được gửi đến ứng viên.' 
+      message: 'Đơn đăng ký đã được duyệt thành công.' 
     })
   } catch (error) {
     console.error('Approve application error:', error)
@@ -184,32 +206,9 @@ export const rejectApplication = async (req, res) => {
     application.rejectionReason = reason
     await application.save()
 
-    // Send rejection email
-    try {
-      await sendEmail({
-        to: application.email,
-        subject: 'Thông báo về đơn đăng ký giảng viên',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #dc2626;">Thông báo</h1>
-            <p>Xin chào ${application.fullName},</p>
-            <p>Chúng tôi đã xem xét đơn đăng ký giảng viên của bạn. Rất tiếc, đơn của bạn chưa được chấp thuận lần này.</p>
-            <p><strong>Lý do:</strong></p>
-            <p style="background: #f3f4f6; padding: 15px; border-radius: 8px;">${reason}</p>
-            <p>Bạn có thể nộp đơn đăng ký mới sau khi bổ sung các thông tin cần thiết.</p>
-            <p>Nếu bạn có thắc mắc, vui lòng liên hệ với chúng tôi.</p>
-            <hr style="margin: 20px 0;">
-            <p style="color: #6b7280; font-size: 14px;">Đội ngũ LMS</p>
-          </div>
-        `
-      })
-    } catch (emailError) {
-      console.error('Failed to send rejection email:', emailError)
-    }
-
     res.json({ 
       success: true, 
-      message: 'Đơn đăng ký đã bị từ chối. Email thông báo đã được gửi đến ứng viên.' 
+      message: 'Đơn đăng ký đã bị từ chối.' 
     })
   } catch (error) {
     console.error('Reject application error:', error)
@@ -243,20 +242,15 @@ export const getAllUsers = async (req, res) => {
   }
 }
 
-// Update user role
-export const updateUserRole = async (req, res) => {
+// Ban user account (student/educator only)
+export const banUserAccount = async (req, res) => {
   try {
     const { userId } = req.params
-    const { role } = req.body
     const adminId = req.auth.userId
 
-    if (!['student', 'educator', 'admin'].includes(role)) {
-      return res.status(400).json({ success: false, message: 'Vai trò không hợp lệ' })
-    }
-
-    // Prevent admin from changing their own role
+    // Prevent admin from banning their own account
     if (userId === adminId) {
-      return res.status(400).json({ success: false, message: 'Không thể thay đổi vai trò của chính mình' })
+      return res.status(400).json({ success: false, message: 'Không thể cấm tài khoản của chính mình' })
     }
 
     const user = await User.findById(userId)
@@ -264,16 +258,61 @@ export const updateUserRole = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Người dùng không tồn tại' })
     }
 
+    if (!['student', 'educator'].includes(user.role)) {
+      return res.status(400).json({ success: false, message: 'Chỉ có thể cấm tài khoản học viên hoặc giảng viên' })
+    }
+
+    if (user.isBanned) {
+      return res.status(400).json({ success: false, message: 'Tài khoản này đã bị cấm trước đó' })
+    }
+
     // Update in database
-    user.role = role
+    user.isBanned = true
     await user.save()
 
-    // Update in Clerk
+    // Keep role metadata in Clerk, add banned flag for downstream integrations.
     await clerkClient.users.updateUser(userId, {
-      publicMetadata: { role }
+      publicMetadata: {
+        role: user.role,
+        isBanned: true,
+      }
     })
 
-    res.json({ success: true, message: `Đã cập nhật vai trò thành ${role}` })
+    res.json({ success: true, message: 'Đã cấm tài khoản thành công' })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// Unban user account (student/educator only)
+export const unbanUserAccount = async (req, res) => {
+  try {
+    const { userId } = req.params
+
+    const user = await User.findById(userId)
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Người dùng không tồn tại' })
+    }
+
+    if (!['student', 'educator'].includes(user.role)) {
+      return res.status(400).json({ success: false, message: 'Chỉ có thể bỏ cấm tài khoản học viên hoặc giảng viên' })
+    }
+
+    if (!user.isBanned) {
+      return res.status(400).json({ success: false, message: 'Tài khoản này chưa bị cấm' })
+    }
+
+    user.isBanned = false
+    await user.save()
+
+    await clerkClient.users.updateUser(userId, {
+      publicMetadata: {
+        role: user.role,
+        isBanned: false,
+      }
+    })
+
+    res.json({ success: true, message: 'Đã bỏ cấm tài khoản thành công' })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
@@ -321,6 +360,29 @@ export const deleteCourseAdmin = async (req, res) => {
     await Course.findByIdAndDelete(courseId)
 
     res.json({ success: true, message: 'Khóa học đã được xóa' })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+// Toggle course visibility (admin)
+export const toggleCourseVisibilityAdmin = async (req, res) => {
+  try {
+    const { courseId } = req.params
+
+    const course = await Course.findById(courseId)
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Khóa học không tồn tại' })
+    }
+
+    course.isPublished = !course.isPublished
+    await course.save()
+
+    res.json({
+      success: true,
+      message: course.isPublished ? 'Đã bỏ ẩn khóa học' : 'Đã ẩn khóa học',
+      isPublished: course.isPublished,
+    })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }

@@ -13,13 +13,16 @@ export const AppContextProvider = (props) => {
   const currency = import.meta.env.VITE_CURRENCY
   const navigate = useNavigate()
 
-  const { getToken } = useAuth()
+  const { getToken, sessionId } = useAuth()
   const { user } = useUser()
 
   const [allCourses, setAllCourses] = useState([])
   const [isEducator, setIsEducator] = useState(false)
   const [enrolledCourses, setEnrolledCourses] = useState([])
   const [userData, setUserData] = useState(null)
+
+  const getEducatorDeferredKey = (userId) => `educator-role-activate-next-login:${userId}`
+  const getEducatorDeferredDoneKey = (userId) => `educator-role-defer-done:${userId}`
 
   // Fetch all courses
   const fetchAllCourses = async () => {
@@ -38,8 +41,37 @@ export const AppContextProvider = (props) => {
 
   // Fetch user data
   const fetchUserData = async () => {
-    if (user.publicMetadata?.role === 'educator') {
-      setIsEducator(true)
+    const hasEducatorRole = user.publicMetadata?.role === 'educator'
+    if (hasEducatorRole && user?.id) {
+      const deferredRaw = localStorage.getItem(getEducatorDeferredKey(user.id))
+      const deferDone = localStorage.getItem(getEducatorDeferredDoneKey(user.id)) === 'true'
+
+      if (deferredRaw) {
+        try {
+          const deferredData = JSON.parse(deferredRaw)
+          if (deferredData?.pendingSessionId === sessionId) {
+            // Keep current session on "Become Educator" flow.
+            setIsEducator(false)
+          } else {
+            setIsEducator(true)
+            localStorage.removeItem(getEducatorDeferredKey(user.id))
+            localStorage.setItem(getEducatorDeferredDoneKey(user.id), 'true')
+          }
+        } catch {
+          setIsEducator(true)
+          localStorage.removeItem(getEducatorDeferredKey(user.id))
+          localStorage.setItem(getEducatorDeferredDoneKey(user.id), 'true')
+        }
+      } else if (!deferDone && sessionId) {
+        // First login seen with educator role: keep current session as "Become Educator".
+        localStorage.setItem(
+          getEducatorDeferredKey(user.id),
+          JSON.stringify({ pendingSessionId: sessionId })
+        )
+        setIsEducator(false)
+      } else {
+        setIsEducator(true)
+      }
     } else {
       setIsEducator(false)
     }
@@ -55,24 +87,32 @@ export const AppContextProvider = (props) => {
 
       if (data.success) {
         setUserData(data.user)
+        return data.user
       } else {
         toast.error(data.message)
+        return null
       }
     } catch (error) {
+      if (error.response?.data?.isBanned) {
+        setUserData({ isBanned: true })
+        return { isBanned: true }
+      }
       toast.error(error.message)
+      return null
     }
   }
 
   // Function to calculate average rating
   const calculateRating = (course) => {
-    if (course.courseRatings.length === 0) {
+    const ratings = Array.isArray(course?.courseRatings) ? course.courseRatings : []
+    if (ratings.length === 0) {
       return 0
     } 
     let totalRating = 0
-    course.courseRatings.forEach(rating => {
-      totalRating += rating.rating
+    ratings.forEach((ratingItem) => {
+      totalRating += Number(ratingItem?.rating ?? ratingItem?.Rating ?? 0)
     })
-    return Math.floor(totalRating / course.courseRatings.length)
+    return Math.floor(totalRating / ratings.length)
   }
 
   // Function to calculate course chapter time
@@ -130,11 +170,12 @@ export const AppContextProvider = (props) => {
     if (!user) return
     const init = async () => {
       // fetch user data first, then enrolled courses
-      await fetchUserData()
+      const currentUserData = await fetchUserData()
+      if (currentUserData?.isBanned) return
       await fetchUserEnrolledCourses()
     }
     init()
-  }, [user])
+  }, [user, sessionId])
 
   const value = {
     currency, allCourses, navigate, calculateRating, isEducator, setIsEducator, calculateChapterTime, calculateCourseDuration, calculateNoOfLectures, enrolledCourses, setEnrolledCourses, fetchUserEnrolledCourses, backendUrl, userData, fetchUserData, getToken, fetchAllCourses

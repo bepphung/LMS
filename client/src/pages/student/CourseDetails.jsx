@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { AppContext } from '../../context/AppContext'
 import Loading from '../../components/student/Loading'
@@ -8,35 +8,126 @@ import Footer from '../../components/student/Footer'
 import Youtube from 'react-youtube'
 import axios from 'axios'
 import { toast } from 'react-toastify'
+import { useClerk } from '@clerk/clerk-react'
 
 const CourseDetails = () => {
+
+  const PREVIEW_DURATION_SECONDS = 4 * 60 + 11
 
   const { id } = useParams()
 
   const [courseData, setCourseData] = useState(null)
   const [openSections, setOpenSections] = useState({})
-  const [isAlreadyEnrolled, setIsAlreadyEnrolled] = useState(false)
   const [playerData, setPlayerData] = useState(null)
+  const [previewRemainingSeconds, setPreviewRemainingSeconds] = useState(PREVIEW_DURATION_SECONDS)
+  const { openSignIn } = useClerk()
+  const previewTimerRef = useRef(null)
+  const previewLimitNotifiedRef = useRef(false)
 
-  const { allCourses, calculateRating, calculateCourseDuration, calculateNoOfLectures, calculateChapterTime, currency, backendUrl, userData, getToken } = useContext(AppContext)
+  const { calculateRating, calculateCourseDuration, calculateNoOfLectures, calculateChapterTime, currency, backendUrl, userData, getToken } = useContext(AppContext)
+  const isAlreadyEnrolled = Boolean(
+    userData &&
+    courseData &&
+    Array.isArray(userData.enrolledCourses) &&
+    userData.enrolledCourses.includes(courseData._id)
+  )
 
-  const fetchCourseData = async () => {
-    try {
-      const { data } = await axios.get(backendUrl + '/api/course/' + id)
-      if (data.success) {
-        setCourseData(data.courseData)
-      } else {
-        toast.error(data.message)
-      }
-    } catch (error) {
-      toast.error(error.message)
+  const clearPreviewTimer = () => {
+    if (previewTimerRef.current) {
+      clearInterval(previewTimerRef.current)
+      previewTimerRef.current = null
     }
   }
+
+  const extractYouTubeVideoId = (url = '') => {
+    const normalized = String(url).trim()
+    if (!normalized) return ''
+
+    // Raw youtube id support
+    if (/^[a-zA-Z0-9_-]{11}$/.test(normalized)) {
+      return normalized
+    }
+
+    try {
+      const parsed = new URL(normalized)
+      const host = parsed.hostname.replace('www.', '')
+
+      if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'music.youtube.com') {
+        return (
+          parsed.searchParams.get('v')
+          || parsed.pathname.split('/').filter(Boolean).pop()
+          || ''
+        )
+      }
+
+      if (host === 'youtu.be' || host === 'youtube-nocookie.com') {
+        return parsed.pathname.split('/').filter(Boolean)[0] || ''
+      }
+    } catch {
+      // Best-effort fallback for malformed URLs
+      return normalized.split('/').pop()?.split('?')[0] || ''
+    }
+
+    return ''
+  }
+
+  const handlePreviewLecture = (lectureUrl) => {
+    const videoId = extractYouTubeVideoId(lectureUrl)
+    if (!videoId) {
+      toast.error('Liên kết xem thử không hợp lệ')
+      return
+    }
+
+    clearPreviewTimer()
+    previewLimitNotifiedRef.current = false
+    setPreviewRemainingSeconds(PREVIEW_DURATION_SECONDS)
+    setPlayerData({
+      videoId,
+      isPreview: true,
+      instanceKey: `${videoId}-${lectureUrl}`
+    })
+  }
+
+  const handlePlayerStateChange = (event) => {
+    if (!playerData?.isPreview) return
+
+    // 1 = PLAYING, 2 = PAUSED, 0 = ENDED
+    if (event.data === 1) {
+      clearPreviewTimer()
+      previewTimerRef.current = setInterval(() => {
+        const currentTime = event.target.getCurrentTime()
+        const remaining = Math.max(0, PREVIEW_DURATION_SECONDS - Math.floor(currentTime))
+        setPreviewRemainingSeconds(remaining)
+
+        if (currentTime >= PREVIEW_DURATION_SECONDS) {
+          event.target.pauseVideo()
+          event.target.seekTo(PREVIEW_DURATION_SECONDS, true)
+          clearPreviewTimer()
+          setPreviewRemainingSeconds(0)
+
+          if (!previewLimitNotifiedRef.current) {
+            previewLimitNotifiedRef.current = true
+            toast.warning('Đã hết thời gian xem thử. Vui lòng đăng ký để xem toàn bộ bài giảng.')
+          }
+        }
+      }, 300)
+      return
+    }
+
+    clearPreviewTimer()
+  }
+
+  useEffect(() => {
+    return () => {
+      clearPreviewTimer()
+    }
+  }, [])
 
   const enrollCourse = async () => {
     try {
       if ( !userData ) {
-        return toast.warn('Please login to enroll the course')
+        openSignIn()
+        return
       }
       if ( isAlreadyEnrolled ) {
         return toast.warn('You are already enrolled in this course')
@@ -64,14 +155,21 @@ const CourseDetails = () => {
   }
 
   useEffect(() => {
-    fetchCourseData()
-  }, [])
-
-  useEffect(() => {
-    if (userData && courseData) {
-      setIsAlreadyEnrolled(userData.enrolledCourses.includes(courseData._id))
+    const fetchCourseData = async () => {
+      try {
+        const { data } = await axios.get(backendUrl + '/api/course/' + id)
+        if (data.success) {
+          setCourseData(data.courseData)
+        } else {
+          toast.error(data.message)
+        }
+      } catch (error) {
+        toast.error(error.message)
+      }
     }
-  }, [userData, courseData])
+
+    fetchCourseData()
+  }, [backendUrl, id])
 
   const toggleSection = (index) => {
     setOpenSections((prev) => (
@@ -91,8 +189,9 @@ const CourseDetails = () => {
       <div className='max-w-xl z-10 text-gray-500'>
         <h1 className='md:text-course-details-heading-large text-course-details-heading-small font-semibold text-gray-800
         '>{courseData.courseTitle}</h1>
-        <p className='pt-4 md:text-base text-sm' 
-        dangerouslySetInnerHTML={{__html : courseData.courseDescription.slice(0, 200)}}></p>
+        
+        {/* <p className='pt-4 md:text-base text-sm' 
+        dangerouslySetInnerHTML={{__html : courseData.courseDescription.slice(0, 200)}}></p> */}
 
       {/* review and rating */}
       <div className='flex items-center space-x-2 pt-3 pb-1 text-sm'>
@@ -130,9 +229,14 @@ const CourseDetails = () => {
                       <div className='flex items-center justify-between w-full text-gray-800 text-xs md:text-default'>
                         <p>{lecture.lectureTitle}</p>
                         <div className='flex gap-2'>
-                          {lecture.isPreviewFree && <p onClick={() => setPlayerData({
-                            videoId: lecture.lectureUrl.split('/').pop()
-                          })} className='text-blue-500 cursor-pointer'>Xem thử</p>}
+                          {lecture.isPreviewFree && (
+                            <p
+                              onClick={() => handlePreviewLecture(lecture.lectureUrl)}
+                              className='text-blue-500 cursor-pointer'
+                            >
+                              Xem thử
+                            </p>
+                          )}
                           <p>{humanizeDuration(lecture.lectureDuration * 60 * 1000, {units: ['h', 'm']})}</p>
                         </div>
                       </div>
@@ -158,7 +262,42 @@ const CourseDetails = () => {
 
         {
           playerData ? 
-                <Youtube videoId={playerData.videoId} opts={{playerVars: {autoplay: 1}}} iframeClassName='w-full aspect-video'/>
+                <div className='relative'>
+                  <Youtube
+                    key={playerData.instanceKey}
+                    videoId={playerData.videoId}
+                    opts={{
+                      playerVars: {
+                        autoplay: 1,
+                        start: 0,
+                        end: PREVIEW_DURATION_SECONDS,
+                        rel: 0,
+                        modestbranding: 1,
+                      }
+                    }}
+                    onStateChange={handlePlayerStateChange}
+                    iframeClassName='w-full aspect-video'
+                  />
+
+                  {playerData.isPreview && (
+                    <>
+                      <div className='absolute top-3 left-3 bg-black/75 text-white px-3 py-1.5 rounded-full text-xs font-medium'>
+                        Xem thử tối đa 04:11
+                      </div>
+                      <div className='absolute bottom-0 left-0 right-0 p-3 bg-linear-to-t from-black/70 to-transparent'>
+                        <p className='text-white text-xs mb-1.5'>
+                          Xem thử đến 4:11. Hãy đăng ký để xem toàn bộ nội dung khóa học.
+                        </p>
+                        <div className='h-1.5 w-full rounded-full bg-white/30 overflow-hidden'>
+                          <div
+                            className='h-full bg-blue-500 rounded-full transition-all duration-300'
+                            style={{ width: `${Math.min(100, Math.max(0, ((PREVIEW_DURATION_SECONDS - previewRemainingSeconds) / PREVIEW_DURATION_SECONDS) * 100))}%` }}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               : <img src={courseData.courseThumbnail} alt="" />
         }
         

@@ -7,7 +7,8 @@ import { useNavigate } from 'react-router-dom'
 
 const MyCourses = () => {
 
-  const { currency, backendUrl, isEducator, getToken } = useContext(AppContext)
+  const { currency, backendUrl, isEducator, getToken, userData } = useContext(AppContext)
+  const hasEducatorAccess = Boolean(isEducator || userData?.role === 'educator' || userData?.role === 'admin')
   const navigateTo = useNavigate()
 
   const [courses, setCourses] = useState(null)
@@ -73,10 +74,10 @@ const MyCourses = () => {
   }
 
   useEffect(() => {
-    if ( isEducator ) {
+    if ( hasEducatorAccess ) {
       fetchEducatorCourses()
     }
-  }, [isEducator])
+  }, [hasEducatorAccess])
 
   return  courses ? (
     <div className='h-screen flex flex-col items-start justify-between md:p-8 md:pb-0 pt-8 pb-0'>

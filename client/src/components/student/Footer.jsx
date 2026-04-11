@@ -27,7 +27,7 @@ const Footer = () => {
           </div>
         </div>
       </div>
-      <p className='py-4 text-center text-xs md:text-sm text-white/60'>Copyright 2025 © Edemy. All rights reserved.</p>
+      <p className='py-4 text-center text-xs md:text-sm text-white/60'>Bản quyền 2025 © Edemy. Đã đăng ký mọi quyền.</p>
     </footer>
   )
 }

@@ -4,6 +4,23 @@ import Stripe from 'stripe'
 import Course from '../models/Course.js'
 import { CourseProgress } from './../models/CourseProgress.js'
 
+const bannedMessage = 'Tài khoản của bạn đã bị vô hiệu hóa do vi phạm điều khoản người dùng.'
+
+const ensureUserIsActive = async (userId, res) => {
+  const user = await User.findById(userId)
+  if (!user) {
+    res.status(404).json({ success: false, message: 'User not found' })
+    return null
+  }
+
+  if (user.isBanned) {
+    res.status(403).json({ success: false, isBanned: true, message: bannedMessage })
+    return null
+  }
+
+  return user
+}
+
 // Get user data
 export const getUserData = async (req, res) => {
   try {
@@ -24,6 +41,8 @@ export const getUserData = async (req, res) => {
 export const userEnrolledCourses = async (req, res) => {
   try {
     const userId = req.auth.userId
+    if (!await ensureUserIsActive(userId, res)) return
+
     const userData = await User.findById(userId).populate('enrolledCourses')
     res.json({ success: true, enrolledCourses: userData.enrolledCourses })
   } catch (error) {
@@ -37,7 +56,9 @@ export const purchaseCourse = async (req, res) => {
     const { courseId } = req.body
     const { origin } = req.headers
     const userId = req.auth.userId
-    const userData = await User.findById(userId)
+    const userData = await ensureUserIsActive(userId, res)
+    if (!userData) return
+
     const courseData = await Course.findById(courseId)
 
     if (!userData || !courseData) {
@@ -90,6 +111,7 @@ export const updateUserCourseProgress = async (req, res) => {
   try {
     const userId = req.auth.userId
     const { courseId, lectureId } = req.body
+    if (!await ensureUserIsActive(userId, res)) return
 
     const progressData = await CourseProgress.findOne({ userId, courseId })
 
@@ -119,6 +141,8 @@ export const getUserCourseProgress = async (req, res) => {
   try {
     const userId = req.auth.userId
     const { courseId } = req.body
+    if (!await ensureUserIsActive(userId, res)) return
+
     const progressData = await CourseProgress.findOne({ userId, courseId })
     
     res.json({ success: true, progressData })
@@ -136,6 +160,9 @@ export const addUserRating = async (req, res) => {
     return res.json({ success: false, message: 'Invalid data provided' })
   }
   try {
+    const activeUser = await ensureUserIsActive(userId, res)
+    if (!activeUser) return
+
     const course = await Course.findById(courseId)
     if (!course) {
       return res.json({ success: false, message: 'Course not found' })
