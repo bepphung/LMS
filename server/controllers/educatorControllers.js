@@ -7,6 +7,43 @@ import { Purchase } from '../models/Purchases.js'
 import User from '../models/User.js'
 import EducatorApplication from '../models/EducatorApplication.js'
 import { assertCloudinaryConfigured } from '../configs/cloudinary.js'
+import { populateTranscripts } from '../utils/transcriptHelper.js'
+
+const normalizeCourseLevel = (level = '') => {
+  const normalized = String(level).trim().toLowerCase()
+  const allowed = ['beginner', 'intermediate', 'advanced', 'all-levels']
+  return allowed.includes(normalized) ? normalized : 'beginner'
+}
+
+const normalizeCourseTags = (tags) => {
+  if (Array.isArray(tags)) {
+    return tags
+      .map(tag => String(tag).trim())
+      .filter(Boolean)
+      .slice(0, 12)
+  }
+
+  if (typeof tags === 'string') {
+    return tags
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(Boolean)
+      .slice(0, 12)
+  }
+
+  return []
+}
+
+const calculateEstimatedDurationHours = (courseContent = []) => {
+  const totalMinutes = (courseContent || []).reduce((chapterTotal, chapter) => {
+    const chapterMinutes = (chapter.chapterContent || []).reduce((lectureTotal, lecture) => {
+      return lectureTotal + Number(lecture.lectureDuration || 0)
+    }, 0)
+    return chapterTotal + chapterMinutes
+  }, 0)
+
+  return Number((totalMinutes / 60).toFixed(1))
+}
 
 const sanitizeFileName = (fileName = 'cv-file') => {
   return fileName
@@ -171,10 +208,25 @@ export const addCourse = async (req, res) => {
 
     const parseCourseData = await JSON.parse(courseData)
     parseCourseData.educator = userId
+    parseCourseData.courseTopic = String(parseCourseData.courseTopic || 'Tổng quát').trim() || 'Tổng quát'
+    parseCourseData.courseLevel = normalizeCourseLevel(parseCourseData.courseLevel)
+    parseCourseData.courseTags = normalizeCourseTags(parseCourseData.courseTags)
+    parseCourseData.estimatedDurationHours = calculateEstimatedDurationHours(parseCourseData.courseContent)
+    parseCourseData.aiEmbedding = []
+    parseCourseData.aiEmbeddingModel = ''
+    parseCourseData.aiEmbeddingUpdatedAt = null
     const newCourse = await Course.create(parseCourseData)
     const imageUpload = await cloudinary.uploader.upload(imageFile.path)
     newCourse.courseThumbnail = imageUpload.secure_url
     await newCourse.save()
+
+    // Fire-and-forget: auto-fetch transcripts for all lectures
+    populateTranscripts(newCourse.courseContent).then(async (count) => {
+      if (count > 0) {
+        await newCourse.save()
+        console.log(`[Transcript] Populated ${count} lecture transcripts for course: ${newCourse.courseTitle}`)
+      }
+    }).catch(err => console.warn('[Transcript] Background fetch failed:', err.message))
 
     res.json({ success: true, message: 'Khóa học đã được tạo thành công', course: newCourse })
 
@@ -207,10 +259,17 @@ export const updateCourse = async (req, res) => {
     // Update course fields
     course.courseTitle = parseCourseData.courseTitle || course.courseTitle
     course.courseDescription = parseCourseData.courseDescription || course.courseDescription
+    course.courseTopic = String(parseCourseData.courseTopic || course.courseTopic || 'Tổng quát').trim() || 'Tổng quát'
+    course.courseLevel = normalizeCourseLevel(parseCourseData.courseLevel || course.courseLevel)
+    course.courseTags = normalizeCourseTags(parseCourseData.courseTags ?? course.courseTags)
     course.coursePrice = parseCourseData.coursePrice ?? course.coursePrice
     course.discount = parseCourseData.discount ?? course.discount
     course.courseContent = parseCourseData.courseContent || course.courseContent
+    course.estimatedDurationHours = calculateEstimatedDurationHours(course.courseContent)
     course.isPublished = parseCourseData.isPublished ?? course.isPublished
+    course.aiEmbedding = []
+    course.aiEmbeddingModel = ''
+    course.aiEmbeddingUpdatedAt = null
 
     // Update thumbnail if new image provided
     if (imageFile) {
@@ -220,6 +279,14 @@ export const updateCourse = async (req, res) => {
     }
 
     await course.save()
+
+    // Fire-and-forget: auto-fetch transcripts for lectures missing content
+    populateTranscripts(course.courseContent).then(async (count) => {
+      if (count > 0) {
+        await course.save()
+        console.log(`[Transcript] Populated ${count} lecture transcripts for course: ${course.courseTitle}`)
+      }
+    }).catch(err => console.warn('[Transcript] Background fetch failed:', err.message))
 
     res.json({ success: true, message: 'Khóa học đã được cập nhật', course })
   } catch (error) {

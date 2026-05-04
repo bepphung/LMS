@@ -70,6 +70,12 @@ const BecomeEducator = () => {
     }
   }, [userData])
 
+  useEffect(() => {
+    if (applicationStatus?.status === 'approved') {
+      navigate('/')
+    }
+  }, [applicationStatus, navigate])
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
@@ -200,14 +206,18 @@ const BecomeEducator = () => {
 
   // Show application status if exists
   if (applicationStatus) {
+    if (applicationStatus.status === 'approved') {
+      return null
+    }
+
     return (
       <>
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-linear-to-br from-gray-50 to-blue-50 py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl mx-auto">
             {/* Pending Status */}
             {applicationStatus.status === 'pending' && (
               <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                <div className="bg-gradient-to-r from-amber-400 to-orange-500 h-2"></div>
+                <div className="bg-linear-to-r from-amber-400 to-orange-500 h-2"></div>
                 <div className="p-8 text-center">
                   <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
                     <svg className="w-10 h-10 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -218,6 +228,7 @@ const BecomeEducator = () => {
                   <p className="text-gray-600 mb-6 max-w-md mx-auto">
                     Đơn đăng ký của bạn đã được gửi thành công và đang chờ admin xem xét.
                     Vui lòng chờ trong khi hệ thống xử lý đơn của bạn.
+                    Sau khi đơn được duyệt, khi bạn truy cập lại vào trang web sẽ thấy lựa chọn đi đến trang giảng viên.
                   </p>
                   
                   {/* Status Info Card */}
@@ -267,52 +278,10 @@ const BecomeEducator = () => {
               </div>
             )}
             
-            {/* Approved Status */}
-            {applicationStatus.status === 'approved' && (
-              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                <div className="bg-gradient-to-r from-green-400 to-emerald-500 h-2"></div>
-                <div className="p-8 text-center">
-                  <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-2xl font-bold text-green-700 mb-3">🎉 Chúc mừng! Đơn đã được duyệt</h2>
-                  <p className="text-gray-600 mb-6 max-w-md mx-auto">
-                    Bạn đã chính thức trở thành giảng viên trên nền tảng của chúng tôi. 
-                    Hãy bắt đầu tạo khóa học đầu tiên và chia sẻ kiến thức của bạn!
-                  </p>
-                  
-                  {/* Success Card */}
-                  <div className="bg-green-50 rounded-xl p-5 mb-6 text-left border border-green-100">
-                    <div className="flex items-center gap-3 mb-3">
-                      <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      <span className="font-semibold text-green-800">Trạng thái: Đã được duyệt</span>
-                    </div>
-                    <p className="text-sm text-green-700">
-                      Bạn có thể truy cập vào trang quản lý giảng viên để tạo và quản lý các khóa học của mình.
-                    </p>
-                  </div>
-
-                  <button 
-                    onClick={() => navigate('/educator')}
-                    className="inline-flex items-center gap-2 bg-green-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-green-700 transition-colors shadow-lg shadow-green-200"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                    Đến trang giảng viên
-                  </button>
-                </div>
-              </div>
-            )}
-            
             {/* Rejected Status */}
             {applicationStatus.status === 'rejected' && (
               <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-                <div className="bg-gradient-to-r from-red-400 to-rose-500 h-2"></div>
+                <div className="bg-linear-to-r from-red-400 to-rose-500 h-2"></div>
                 <div className="p-8 text-center">
                   <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
                     <svg className="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

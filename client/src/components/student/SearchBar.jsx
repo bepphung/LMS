@@ -10,7 +10,8 @@ const SearchBar = ({ data }) => {
 
   const onSearchHandler = (e) => {
     e.preventDefault()
-    navigate('/course-list/' + input)
+    const query = input.trim()
+    navigate(query ? `/course-list?q=${encodeURIComponent(query)}` : '/course-list')
   }
 
   return (

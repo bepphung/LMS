@@ -290,6 +290,7 @@ const Player = () => {
       {/* AI Chatbot */}
       <AIChatbot 
         courseId={courseId} 
+        lectureId={playerData?.lectureId}
         lessonContext={playerData?.lectureTitle}
         isOpen={showAIChat} 
         onClose={() => setShowAIChat(false)} 
@@ -301,6 +302,7 @@ const Player = () => {
           courseId={courseId}
           chapterIndex={currentChapterIndex}
           lectureIndex={currentLectureIndex}
+          lectureId={playerData?.lectureId}
           onClose={() => setShowAISummary(false)}
         />
       )}

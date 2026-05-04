@@ -11,6 +11,7 @@ export const AppContextProvider = (props) => {
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL
   const currency = import.meta.env.VITE_CURRENCY
+  const normalizedCurrency = String(currency || 'VNĐ').toUpperCase()
   const navigate = useNavigate()
 
   const { getToken, sessionId } = useAuth()
@@ -20,9 +21,6 @@ export const AppContextProvider = (props) => {
   const [isEducator, setIsEducator] = useState(false)
   const [enrolledCourses, setEnrolledCourses] = useState([])
   const [userData, setUserData] = useState(null)
-
-  const getEducatorDeferredKey = (userId) => `educator-role-activate-next-login:${userId}`
-  const getEducatorDeferredDoneKey = (userId) => `educator-role-defer-done:${userId}`
 
   // Fetch all courses
   const fetchAllCourses = async () => {
@@ -41,40 +39,8 @@ export const AppContextProvider = (props) => {
 
   // Fetch user data
   const fetchUserData = async () => {
-    const hasEducatorRole = user.publicMetadata?.role === 'educator'
-    if (hasEducatorRole && user?.id) {
-      const deferredRaw = localStorage.getItem(getEducatorDeferredKey(user.id))
-      const deferDone = localStorage.getItem(getEducatorDeferredDoneKey(user.id)) === 'true'
-
-      if (deferredRaw) {
-        try {
-          const deferredData = JSON.parse(deferredRaw)
-          if (deferredData?.pendingSessionId === sessionId) {
-            // Keep current session on "Become Educator" flow.
-            setIsEducator(false)
-          } else {
-            setIsEducator(true)
-            localStorage.removeItem(getEducatorDeferredKey(user.id))
-            localStorage.setItem(getEducatorDeferredDoneKey(user.id), 'true')
-          }
-        } catch {
-          setIsEducator(true)
-          localStorage.removeItem(getEducatorDeferredKey(user.id))
-          localStorage.setItem(getEducatorDeferredDoneKey(user.id), 'true')
-        }
-      } else if (!deferDone && sessionId) {
-        // First login seen with educator role: keep current session as "Become Educator".
-        localStorage.setItem(
-          getEducatorDeferredKey(user.id),
-          JSON.stringify({ pendingSessionId: sessionId })
-        )
-        setIsEducator(false)
-      } else {
-        setIsEducator(true)
-      }
-    } else {
-      setIsEducator(false)
-    }
+    const hasEducatorRole = user?.publicMetadata?.role === 'educator'
+    setIsEducator(Boolean(hasEducatorRole))
 
     try {
       const token = await getToken()
@@ -142,6 +108,20 @@ export const AppContextProvider = (props) => {
     return totalLectures
   }
 
+  const formatCurrency = (amount = 0) => {
+    const numericAmount = Number(amount)
+    const safeAmount = Number.isFinite(numericAmount) ? numericAmount : 0
+    const formattedNumber = new Intl.NumberFormat('vi-VN', {
+      maximumFractionDigits: 0
+    }).format(Math.round(safeAmount))
+
+    if (normalizedCurrency === 'VND' || normalizedCurrency === 'VNĐ') {
+      return `${formattedNumber} VNĐ`
+    }
+
+    return `${currency}${formattedNumber}`
+  }
+
   // Fetch user's enrolled courses
   const fetchUserEnrolledCourses = async () => {
     try {
@@ -178,7 +158,7 @@ export const AppContextProvider = (props) => {
   }, [user, sessionId])
 
   const value = {
-    currency, allCourses, navigate, calculateRating, isEducator, setIsEducator, calculateChapterTime, calculateCourseDuration, calculateNoOfLectures, enrolledCourses, setEnrolledCourses, fetchUserEnrolledCourses, backendUrl, userData, fetchUserData, getToken, fetchAllCourses
+    currency, formatCurrency, allCourses, navigate, calculateRating, isEducator, setIsEducator, calculateChapterTime, calculateCourseDuration, calculateNoOfLectures, enrolledCourses, setEnrolledCourses, fetchUserEnrolledCourses, backendUrl, userData, fetchUserData, getToken, fetchAllCourses
   }
 
   return (

@@ -4,7 +4,6 @@ import {
   chatWithAI,
   summarizeLesson,
   generateQuiz,
-  getRecommendations,
   generateCourseDescription,
   checkAIStatus
 } from '../controllers/aiController.js'
@@ -22,9 +21,6 @@ aiRouter.post('/summarize', requireAuth, summarizeLesson)
 
 // Generate quiz questions
 aiRouter.post('/generate-quiz', requireAuth, generateQuiz)
-
-// Get course recommendations
-aiRouter.get('/recommendations', requireAuth, getRecommendations)
 
 // Generate course description (for educators)
 aiRouter.post('/generate-description', requireAuth, generateCourseDescription)

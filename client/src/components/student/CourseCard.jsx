@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom'
 
 const CourseCard = ({ course }) => {
 
-  const { currency, calculateRating } = useContext(AppContext)
+  const { calculateRating, formatCurrency } = useContext(AppContext)
 
   // Handle missing educator (deleted user)
   if (!course || !course.educator) {
@@ -24,9 +24,9 @@ const CourseCard = ({ course }) => {
           <div className='flex'>
             {[...Array(5)].map((_, i) => (<img className='w-3.5 h-3.5' key={i} src={i < Math.floor(calculateRating(course)) ? assets.star : assets.star_blank} alt='' />))}
           </div>
-          <p className='text-gray-500'>{course.courseRatings.length} ratings</p>
+          <p className='text-gray-500'>{course.courseRatings?.length || 0} ratings</p>
         </div>
-        <p className='text-base font-semibold text-gray-800'>{currency}{(course.coursePrice - course.discount * course.coursePrice / 100).toFixed(2)}</p>
+        <p className='text-base font-semibold text-gray-800'>{formatCurrency(course.coursePrice - course.discount * course.coursePrice / 100)}</p>
       </div>
     </Link>
   )

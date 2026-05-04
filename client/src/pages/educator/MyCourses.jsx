@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 
 const MyCourses = () => {
 
-  const { currency, backendUrl, isEducator, getToken, userData } = useContext(AppContext)
+  const { formatCurrency, backendUrl, isEducator, getToken, userData } = useContext(AppContext)
   const hasEducatorAccess = Boolean(isEducator || userData?.role === 'educator' || userData?.role === 'admin')
   const navigateTo = useNavigate()
 
@@ -115,7 +115,7 @@ const MyCourses = () => {
                     </div>
                   </td>
                   <td className='px-4 py-3'>
-                    {currency} {Math.floor(course.enrolledStudents.length * (course.coursePrice - course.discount * course.coursePrice / 100))}
+                    {formatCurrency(course.enrolledStudents.length * (course.coursePrice - course.discount * course.coursePrice / 100))}
                   </td>
                   <td className='px-4 py-3'>{course.enrolledStudents.length}</td>
                   <td className='px-4 py-3'>

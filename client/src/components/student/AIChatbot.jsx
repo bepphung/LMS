@@ -3,7 +3,7 @@ import { AppContext } from '../../context/AppContext'
 import axios from 'axios'
 import { formatAiTextToHtml } from './aiTextFormatter'
 
-const AIChatbot = ({ courseId, lessonContext, isOpen, onClose }) => {
+const AIChatbot = ({ courseId, lectureId, lessonContext, isOpen, onClose }) => {
   const { backendUrl, getToken } = useContext(AppContext)
   const [messages, setMessages] = useState([
     { 
@@ -37,6 +37,7 @@ const AIChatbot = ({ courseId, lessonContext, isOpen, onClose }) => {
       const { data } = await axios.post(`${backendUrl}/api/ai/chat`, {
         message: userMessage,
         courseId,
+        lectureId,
         lessonContext
       }, {
         headers: { Authorization: `Bearer ${token}` }

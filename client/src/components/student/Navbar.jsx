@@ -16,7 +16,7 @@ const Navbar = () => {
 
   const handleEducatorClick = () => {
     if (isEducator) {
-      navigate('/educator')
+      navigate('/my-enrollments')
     } else {
       navigate('/become-educator')
     }
@@ -24,7 +24,7 @@ const Navbar = () => {
 
   return (
     <div className={`flex items-center justify-between px-4 sm:px-10 md:px-14 lg:px-36 border-b border-gray-500 py-4 ${isCourseListPage ? 'bg-white' : 'bg-cyan-100/70'}`}>
-      <img onClick={() => navigate('/')} src={assets.logo} alt='Logo' className='w-[115px] h-[34px] cursor-pointer'/>
+      <img onClick={() => navigate('/')} src={assets.logo} alt='Logo' className='w-28.75 h-8.5 cursor-pointer'/>
       <div className='hidden md:flex items-center gap-5 text-gray-500 '>
         <div className='flex items-center gap-5 '>
           { user && 
@@ -36,9 +36,9 @@ const Navbar = () => {
             </>
           )}
           <button className='cursor-pointer hover:text-gray-700' onClick={handleEducatorClick}>
-            {isEducator ? 'Trang giảng viên' : 'Trở thành giảng viên'}
+            {isEducator ? 'Lớp học của tôi' : 'Trở thành giảng viên'}
           </button>
-          | <Link to='/my-enrollments' className='hover:text-gray-700'>Lớp học của tôi</Link>
+          | <Link to={isEducator ? '/educator' : '/my-enrollments'} className='hover:text-gray-700'>{isEducator ? 'Trang giảng viên' : 'Lớp học của tôi'}</Link>
           </>
           }
         </div>
@@ -58,9 +58,9 @@ const Navbar = () => {
             </>
           )}
           <button className='cursor-pointer' onClick={handleEducatorClick}>
-            {isEducator ? 'Giảng viên' : 'Trở thành GV'}
+            {isEducator ? 'Lớp học' : 'Trở thành GV'}
           </button>
-          | <Link to='/my-enrollments'>Lớp học</Link>
+          | <Link to={isEducator ? '/educator' : '/my-enrollments'}>{isEducator ? 'Giảng viên' : 'Lớp học'}</Link>
           </>
           }
         </div>

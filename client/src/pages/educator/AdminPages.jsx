@@ -164,7 +164,7 @@ const AdminLayout = () => {
 
 // Admin Dashboard Component
 export const AdminDashboard = () => {
-  const { backendUrl, getToken, currency } = useContext(AppContext)
+  const { backendUrl, getToken, formatCurrency } = useContext(AppContext)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -261,7 +261,7 @@ export const AdminDashboard = () => {
           <div>
             <p className='text-emerald-100 text-sm mb-1'>Tổng doanh thu</p>
             <p className='text-4xl font-bold'>
-              {currency}{data?.totalRevenue?.toFixed(2) || '0.00'}
+              {formatCurrency(data?.totalRevenue || 0)}
             </p>
           </div>
           <div className='w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center'>
@@ -906,7 +906,7 @@ export const AdminUsers = () => {
 
 // Courses Management
 export const AdminCourses = () => {
-  const { backendUrl, getToken, currency } = useContext(AppContext)
+  const { backendUrl, getToken, formatCurrency } = useContext(AppContext)
   const [courses, setCourses] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
@@ -1056,13 +1056,13 @@ export const AdminCourses = () => {
                 <td className='px-4 py-3 text-sm'>
                   {course.discount > 0 ? (
                     <div>
-                      <span className='text-gray-400 line-through'>{currency}{course.coursePrice}</span>
+                      <span className='text-gray-400 line-through'>{formatCurrency(course.coursePrice)}</span>
                       <span className='ml-2 text-green-600 font-medium'>
-                        {currency}{(course.coursePrice - course.coursePrice * course.discount / 100).toFixed(0)}
+                        {formatCurrency(course.coursePrice - course.coursePrice * course.discount / 100)}
                       </span>
                     </div>
                   ) : (
-                    <span>{currency}{course.coursePrice}</span>
+                    <span>{formatCurrency(course.coursePrice)}</span>
                   )}
                 </td>
                 <td className='px-4 py-3 text-sm text-gray-600'>

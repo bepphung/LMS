@@ -5,7 +5,7 @@ import { toast } from 'react-toastify'
 import { formatAiTextToHtml } from './aiTextFormatter'
 
 // Lesson Summary Component
-export const AILessonSummary = ({ courseId, chapterIndex, lectureIndex, onClose }) => {
+export const AILessonSummary = ({ courseId, chapterIndex, lectureIndex, lectureId, onClose }) => {
   const { backendUrl, getToken } = useContext(AppContext)
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -17,7 +17,8 @@ export const AILessonSummary = ({ courseId, chapterIndex, lectureIndex, onClose 
       const { data } = await axios.post(`${backendUrl}/api/ai/summarize`, {
         courseId,
         chapterIndex,
-        lectureIndex
+        lectureIndex,
+        lectureId
       }, {
         headers: { Authorization: `Bearer ${token}` }
       })
@@ -347,98 +348,4 @@ export const AIQuizGenerator = ({ courseId, chapterIndex, onClose }) => {
   )
 }
 
-// Course Recommendations Component
-export const AICourseRecommendations = ({ onClose }) => {
-  const { backendUrl, getToken, currency, navigate } = useContext(AppContext)
-  const [recommendations, setRecommendations] = useState(null)
-  const [loading, setLoading] = useState(true)
-
-  React.useEffect(() => {
-    const fetchRecommendations = async () => {
-      try {
-        const token = await getToken()
-        const { data } = await axios.get(`${backendUrl}/api/ai/recommendations`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        
-        if (data.success) {
-          setRecommendations(data.recommendations)
-        }
-      } catch (error) {
-        console.error('Recommendations error:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-    
-    fetchRecommendations()
-  }, [])
-
-  return (
-    <div className='fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4'>
-      <div className='bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden'>
-        <div className='p-6 border-b bg-linear-to-r from-orange-500 to-amber-500 text-white'>
-          <div className='flex items-center justify-between'>
-            <div className='flex items-center gap-3'>
-              <div className='w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center'>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <div>
-                <h3 className='font-semibold text-lg'>Gợi ý khóa học</h3>
-                <p className='text-sm text-orange-100'>Dựa trên lịch sử học tập của bạn</p>
-              </div>
-            </div>
-            <button onClick={onClose} className='p-2 hover:bg-white/20 rounded-lg transition-colors'>
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-        
-        <div className='p-6 overflow-y-auto max-h-[60vh]'>
-          {loading && (
-            <div className='text-center py-12'>
-              <div className='w-16 h-16 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin mx-auto mb-4'></div>
-              <p className='text-gray-600'>Đang phân tích...</p>
-            </div>
-          )}
-          
-          {!loading && recommendations?.length === 0 && (
-            <div className='text-center py-12 text-gray-500'>
-              <p>Bạn đã đăng ký tất cả các khóa học!</p>
-            </div>
-          )}
-          
-          {!loading && recommendations?.length > 0 && (
-            <div className='space-y-4'>
-              {recommendations.map((rec, idx) => (
-                <div 
-                  key={idx}
-                  className='bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition-colors cursor-pointer'
-                  onClick={() => rec.courseId && navigate(`/course/${rec.courseId}`)}
-                >
-                  <div className='flex items-start justify-between'>
-                    <div className='flex-1'>
-                      <h4 className='font-semibold text-gray-800 mb-1'>{rec.title}</h4>
-                      <p className='text-sm text-gray-600'>{rec.reason}</p>
-                    </div>
-                    {rec.coursePrice && (
-                      <span className='text-green-600 font-medium ml-4'>
-                        {currency}{rec.coursePrice}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default { AILessonSummary, AIQuizGenerator, AICourseRecommendations }
+export default { AILessonSummary, AIQuizGenerator }

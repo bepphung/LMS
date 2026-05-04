@@ -65,18 +65,20 @@ export const purchaseCourse = async (req, res) => {
       return res.json({ success: false, message: 'Invalid user or course' })
     }
 
+    const currency = (process.env.CURRENCY || 'vnd').toLowerCase()
+    const discountedAmount = courseData.coursePrice - courseData.coursePrice * courseData.discount / 100
+    const isZeroDecimalCurrency = currency === 'vnd'
+
     const purchaseData = {
       courseId: courseData._id,
       userId,
-      amount: (courseData.coursePrice - courseData.coursePrice * courseData.discount / 100).toFixed(2),
+      amount: isZeroDecimalCurrency ? Math.round(discountedAmount) : Number(discountedAmount.toFixed(2)),
     }
 
     const newPurchase = await Purchase.create(purchaseData)
 
     // Stripe Gateway Initialization
     const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY)
-
-    const currency = process.env.CURRENCY.toLowerCase()
 
     // Create line items to for stripe
     const line_items = [{
@@ -85,7 +87,9 @@ export const purchaseCourse = async (req, res) => {
         product_data: {
           name: courseData.courseTitle,
         },
-        unit_amount: Math.floor(purchaseData.amount * 100),
+        unit_amount: isZeroDecimalCurrency
+          ? Math.round(purchaseData.amount)
+          : Math.round(purchaseData.amount * 100),
       },
       quantity: 1,
     }]

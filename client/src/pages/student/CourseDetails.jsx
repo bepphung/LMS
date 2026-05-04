@@ -24,7 +24,7 @@ const CourseDetails = () => {
   const previewTimerRef = useRef(null)
   const previewLimitNotifiedRef = useRef(false)
 
-  const { calculateRating, calculateCourseDuration, calculateNoOfLectures, calculateChapterTime, currency, backendUrl, userData, getToken } = useContext(AppContext)
+  const { calculateRating, calculateCourseDuration, calculateNoOfLectures, calculateChapterTime, formatCurrency, backendUrl, userData, getToken } = useContext(AppContext)
   const isAlreadyEnrolled = Boolean(
     userData &&
     courseData &&
@@ -308,8 +308,8 @@ const CourseDetails = () => {
           </div>
 
           <div className='flex gap-3 items-center pt-2'>
-            <p className='text-gray-800 md:text-4xl text-2xl font-semibold'>{currency} {(courseData.coursePrice - courseData.discount * courseData.coursePrice / 100).toFixed(2)}</p>
-            <p className='md:text-lg text-gray-500 line-through'>{currency} {courseData.coursePrice}</p>
+            <p className='text-gray-800 md:text-4xl text-2xl font-semibold'>{formatCurrency(courseData.coursePrice - courseData.discount * courseData.coursePrice / 100)}</p>
+            <p className='md:text-lg text-gray-500 line-through'>{formatCurrency(courseData.coursePrice)}</p>
             <p className='md:text-lg text-gray-500'>Giảm {courseData.discount}%</p>
           </div>
 

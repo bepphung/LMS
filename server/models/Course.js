@@ -5,6 +5,7 @@ const lectureSchema = new mongoose.Schema({
   lectureTitle: { type: String, required: true },
   lectureDuration: { type: Number, required: true },
   lectureUrl: { type: String, required: true },
+  lectureContent: { type: String, default: '' },
   isPreviewFree: { type: Boolean, default: true },
   lectureOrder: { type: Number, required: true }
 }, {_id: false})
@@ -19,6 +20,17 @@ const chapterSchema = new mongoose.Schema({
 const courseSchema = new mongoose.Schema({
   courseTitle: { type: String, required: true },
   courseDescription: { type: String, required: true },
+  courseTopic: { type: String, default: 'Tổng quát' },
+  courseLevel: {
+    type: String,
+    enum: ['beginner', 'intermediate', 'advanced', 'all-levels'],
+    default: 'beginner'
+  },
+  courseTags: [{ type: String }],
+  estimatedDurationHours: { type: Number, default: 0, min: 0 },
+  aiEmbedding: [{ type: Number }],
+  aiEmbeddingModel: { type: String, default: '' },
+  aiEmbeddingUpdatedAt: { type: Date, default: null },
   courseThumbnail: { type: String },
   coursePrice: { type: Number, required: true },
   isPublished: { type: Boolean, default: true },
