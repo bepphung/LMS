@@ -1,13 +1,45 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react'
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { AppContext } from '../../context/AppContext'
 import SearchBar from '../../components/student/SearchBar'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import CourseCard from '../../components/student/CourseCard'
 import { assets } from '../../assets/assets'
 import Footer from '../../components/student/Footer'
 import axios from 'axios'
 import { toast } from 'react-toastify'
-import { generateQueryEmbedding } from '../../utils/queryEmbedding'
+
+const DEBOUNCE_MS = 500
+
+const SkeletonCard = () => (
+  <div className='bg-white border border-gray-100 rounded-lg p-3 animate-pulse'>
+    <div className='w-full h-24 bg-gray-200 rounded-md mb-2' />
+    <div className='h-3 bg-gray-200 rounded w-3/4 mb-2' />
+    <div className='h-2 bg-gray-100 rounded w-1/2' />
+  </div>
+)
+
+const SkeletonOverview = () => (
+  <div className='mt-8 border rounded-2xl bg-linear-to-r from-cyan-50 to-blue-50 p-6 animate-pulse'>
+    <div className='flex items-center gap-3 mb-5'>
+      <div className='h-7 bg-gray-200 rounded w-40' />
+    </div>
+    <div className='bg-white border border-blue-100 rounded-xl p-5'>
+      <div className='space-y-3'>
+        <div className='h-4 bg-gray-200 rounded w-full' />
+        <div className='h-4 bg-gray-200 rounded w-5/6' />
+        <div className='h-4 bg-gray-100 rounded w-2/3' />
+      </div>
+      <div className='mt-6 border-t border-blue-50 pt-4'>
+        <div className='h-3 bg-gray-200 rounded w-48 mb-4' />
+        <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4'>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      </div>
+    </div>
+  </div>
+)
 
 const CoursesList = () => {
 
@@ -18,24 +50,25 @@ const CoursesList = () => {
   const [filteredCourse, setFilteredCourse] = useState([])
   const [aiAdvice, setAiAdvice] = useState(null)
   const [aiRecommendations, setAiRecommendations] = useState([])
+  const [searchMeta, setSearchMeta] = useState(null)
   const [overviewLoading, setOverviewLoading] = useState(false)
+  const debounceRef = useRef(null)
 
   const [priceRange, setPriceRange] = useState({ min: '', max: '' })
   const [topicFilter, setTopicFilter] = useState('all')
   const [durationFilter, setDurationFilter] = useState('all')
   const [levelFilter, setLevelFilter] = useState('all')
+  const hasAiOverview = (typeof aiAdvice === 'string' && aiAdvice.trim().length > 0) || aiRecommendations.length > 0
+
+  // Collect AI recommendation IDs for badge display
+  const aiRecommendedIds = useMemo(() => {
+    return new Set(aiRecommendations.map(c => c._id))
+  }, [aiRecommendations])
 
   const availableTopics = useMemo(() => {
     const topics = allCourses.map(course => course.courseTopic).filter(Boolean)
     return [...new Set(topics)].sort((a, b) => a.localeCompare(b, 'vi'))
   }, [allCourses])
-
-  const levelText = {
-    beginner: 'Cơ bản',
-    intermediate: 'Trung cấp',
-    advanced: 'Nâng cao',
-    'all-levels': 'Mọi trình độ'
-  }
 
   const normalizeText = (value = '') => {
     return String(value)
@@ -94,47 +127,62 @@ const CoursesList = () => {
     setFilteredCourse(filtered)
   }, [allCourses, keyword, topicFilter, levelFilter, durationFilter, priceRange])
 
+  // Debounced semantic search API call
   useEffect(() => {
-    const fetchOverview = async () => {
-      if (!keyword) {
-        setAiAdvice(null)
-        setAiRecommendations([])
-        return
-      }
+    // Clear previous debounce timer
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
+    }
 
-      setOverviewLoading(true)
+    if (!keyword) {
+      setAiAdvice(null)
+      setAiRecommendations([])
+      setSearchMeta(null)
+      setOverviewLoading(false)
+      return
+    }
+
+    // Show skeleton immediately
+    setOverviewLoading(true)
+    setAiAdvice(null)
+    setAiRecommendations([])
+    setSearchMeta(null)
+
+    debounceRef.current = setTimeout(async () => {
       try {
-        let queryEmbedding = []
-        try {
-          queryEmbedding = await generateQueryEmbedding(keyword)
-        } catch {
-          // Fallback to lexical scoring when browser cannot load embedding model.
-          queryEmbedding = []
-        }
-
         const { data } = await axios.post(`${backendUrl}/api/course/semantic-overview`, {
           query: keyword,
-          queryEmbedding,
           limit: 5
         })
         if (data.success) {
-          setAiAdvice(data.advice || null)
+          const safeAdvice = typeof data.advice === 'string'
+            ? data.advice.replace(/\*/g, '').trim()
+            : null
+          setAiAdvice(safeAdvice)
           setAiRecommendations(data.recommendations || [])
+          setSearchMeta(data.meta || null)
         } else {
           setAiAdvice(null)
           setAiRecommendations([])
+          setSearchMeta(null)
           toast.error(data.message || 'Không thể tạo AI Overview')
         }
       } catch (error) {
         setAiAdvice(null)
         setAiRecommendations([])
+        setSearchMeta(null)
         toast.error(error.response?.data?.message || error.message)
       } finally {
         setOverviewLoading(false)
       }
-    }
+    }, DEBOUNCE_MS)
 
-    fetchOverview()
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
+    }
   }, [backendUrl, keyword])
 
   const clearKeyword = () => {
@@ -165,59 +213,83 @@ const CoursesList = () => {
       </div>
       }
 
-      {/* AI Overview */}
-      {keyword && (
+      {/* AI Overview — Skeleton while loading */}
+      {keyword && overviewLoading && <SkeletonOverview />}
+
+      {/* AI Overview — Results */}
+      {keyword && !overviewLoading && hasAiOverview && (
         <div className='mt-8 border rounded-2xl bg-linear-to-r from-cyan-50 to-blue-50 p-6'>
           <div className='flex items-center justify-between gap-4 flex-wrap'>
-            <div>
-              <p className='text-xs font-semibold tracking-wider text-blue-700 uppercase'>AI Overview</p>
-              <h2 className='text-2xl font-semibold text-gray-800'>Gợi ý ngữ nghĩa cho từ khóa "{keyword}"</h2>
-              <p className='text-sm text-gray-600 mt-1'>Hệ thống semantic search phân tích ý nghĩa truy vấn theo chủ đề, trình độ và ngữ cảnh nội dung khóa học.</p>
+            <div className='flex items-center gap-3'>
+              <h2 className='text-2xl font-semibold text-gray-800'>✨ AI Overview</h2>
+              {searchMeta && (
+                <span className='text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium'>
+                  {searchMeta.searchMethod === 'hybrid' ? 'Semantic + Lexical' : searchMeta.searchMethod}
+                </span>
+              )}
             </div>
+            {searchMeta && (
+              <span className='text-xs text-gray-500'>
+                {searchMeta.totalMatches} khóa học phù hợp{searchMeta.embeddingCached ? ' • Cache ✓' : ''}
+              </span>
+            )}
           </div>
 
           <div className='mt-5 grid grid-cols-1 md:grid-cols-2 gap-4'>
-            {overviewLoading && (
-              <div className='col-span-full py-6 text-center text-gray-500'>Đang phân tích ngữ nghĩa truy vấn...</div>
-            )}
+            <div className='col-span-full bg-white border border-blue-100 rounded-xl p-5'>
+              {aiAdvice && (
+                <p className='text-md md:text-lg text-gray-700 leading-relaxed whitespace-pre-line'>{aiAdvice}</p>
+              )}
 
-            {!overviewLoading && !aiAdvice && aiRecommendations.length === 0 && (
-              <div className='col-span-full py-6 text-center text-gray-500'>Chưa có gợi ý ngữ nghĩa phù hợp, hãy thử từ khóa cụ thể hơn.</div>
-            )}
-
-            {!overviewLoading && aiAdvice && (
-              <div className='col-span-full bg-white border border-blue-100 rounded-xl p-5'>
-                <div className='flex items-center gap-2 mb-3'>
-                  <div className='w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center'>
-                    <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
+              {aiRecommendations.length > 0 && (
+                <div className={aiAdvice ? 'mt-6 border-t border-blue-50 pt-4' : ''}>
+                  <h4 className="text-sm font-bold text-gray-800 mb-4">Top courses to get started:</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {aiRecommendations.slice(0, 3).map((course) => (
+                      <Link
+                        to={`/course/${course._id}`}
+                        key={course._id}
+                        onClick={() => window.scrollTo(0, 0)}
+                        className="group bg-white border border-gray-100 rounded-lg p-3 hover:shadow-lg hover:-translate-y-1 transition-all cursor-pointer"
+                      >
+                        <img src={course.courseThumbnail} className="w-full h-24 object-cover rounded-md mb-2" alt="" />
+                        <h5 className="text-xs font-bold text-gray-900 line-clamp-2 group-hover:text-blue-600">{course.courseTitle}</h5>
+                        <div className='flex items-center gap-2 mt-2'>
+                          <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+                            {course.courseLevel}
+                          </span>
+                          {course._score != null && (
+                            <span className="text-[10px] bg-green-50 text-green-600 px-2 py-0.5 rounded-full">
+                              Score: {Number(course._score).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      </Link>
+                    ))}
                   </div>
-                  <h3 className='text-lg font-semibold text-gray-800'>Lời khuyên từ AI Consultant</h3>
                 </div>
-                <p className='text-sm text-gray-700 leading-relaxed whitespace-pre-line'>{aiAdvice}</p>
-              </div>
-            )}
+              )}
 
-            {!overviewLoading && aiRecommendations.length > 0 && (
-              <div className='col-span-full mt-2'>
-                <h4 className='text-base font-semibold text-gray-800 mb-3'>Khóa học phù hợp cho bạn</h4>
-                <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                  {aiRecommendations.map((course) => (
-                    <div key={course._id} className='bg-white border border-blue-100 rounded-xl p-4 shadow-sm'>
-                      <h3 className='font-semibold text-gray-800 mt-1'>{course.courseTitle}</h3>
-                      <p className='text-sm text-gray-600 mt-2 line-clamp-3'>{course.courseDescription?.replace(/<[^>]*>/g, ' ')}</p>
-                      <div className='mt-3 flex items-center gap-2 flex-wrap text-xs text-gray-500'>
-                        <span className='px-2 py-1 bg-gray-100 rounded-full'>{course.courseTopic || 'Tổng quát'}</span>
-                        <span className='px-2 py-1 bg-gray-100 rounded-full'>{levelText[course.courseLevel] || 'Cơ bản'}</span>
-                        <span className='px-2 py-1 bg-gray-100 rounded-full'>{course.estimatedDurationHours || 0} giờ</span>
-                      </div>
-                    </div>
-                  ))}
+              {/* Related topics suggestions */}
+              {searchMeta?.relatedTopics?.length > 0 && (
+                <div className='mt-4 pt-3 border-t border-blue-50'>
+                  <p className='text-xs text-gray-500'>
+                    Chủ đề liên quan:{' '}
+                    {searchMeta.relatedTopics.map((topic, i) => (
+                      <span key={topic}>
+                        <span
+                          className='text-blue-600 hover:underline cursor-pointer'
+                          onClick={() => setSearchParams({ q: topic })}
+                        >
+                          {topic}
+                        </span>
+                        {i < searchMeta.relatedTopics.length - 1 && ', '}
+                      </span>
+                    ))}
+                  </p>
                 </div>
-              </div>
-            )}
-
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -273,7 +345,7 @@ const CoursesList = () => {
       </div>
 
       <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 my-16 gap-3 px-2 md:p-0'>
-        {filteredCourse.map((course, index) => <CourseCard key={index} course={course} />)}
+        {filteredCourse.map((course, index) => <CourseCard key={index} course={course} isAiRecommended={aiRecommendedIds.has(course._id)} />)}
         {filteredCourse.length === 0 && (
           <div className='col-span-full py-12 text-center text-gray-500 border rounded-xl'>
             Không tìm thấy khóa học phù hợp với tiêu chí hiện tại.

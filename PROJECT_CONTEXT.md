@@ -237,12 +237,14 @@ Các giá trị được export qua `AppContext.Provider` cho toàn bộ các co
 
 **Kiến trúc**: Hệ thống AI sử dụng **Retrieval-Augmented Generation (RAG)** — truy vấn transcript thực tế từ DB rồi inject vào prompt cho LLM, thay vì chỉ dựa vào tiêu đề bài học.
 
-**AI Provider**: Chỉ sử dụng **Google Gemini API** (`GEMINI_API_KEY`). OpenAI đã bị loại bỏ hoàn toàn. Có cơ chế retry backoff và model fallback (gemini-2.0-flash → gemini-1.5-flash → gemini-1.5-pro).
+**AI Provider**: Hệ thống đã nâng cấp lên **Gemini 3 Flash SDK (2026)** thông qua thư viện chính thức `@google/genai`. OpenAI đã bị loại bỏ hoàn toàn.
 
 **Transcript Pipeline**:
-* Khi Educator tạo/cập nhật khóa học, server tự động gọi `populateTranscripts()` (fire-and-forget) để lấy transcript từ YouTube URL bằng package `youtube-transcript`.
+* Khi Educator tạo/cập nhật khóa học, server tự động gọi `populateTranscripts()` để lấy transcript từ YouTube URL bằng package `youtube-transcript`.
 * Transcript được lưu vào trường `lectureContent` trong Lecture Schema.
-* Nếu video không có subtitle, `lectureContent` sẽ rỗng và AI sẽ fallback về dùng title + kiến thức chung.
+* `lectureContent` là nguồn ngữ cảnh **ưu tiên số 1** cho các tính năng AI (`chatWithAI`, `summarizeLesson`, `generateQuiz`).
+* Nếu video không có subtitle, `lectureContent` sẽ rỗng và AI sẽ fallback về `courseDescription` + ngữ cảnh tổng quát.
+* Sau khi đồng bộ transcript trong `addCourse/updateCourse`, hệ thống tự động tạo `aiEmbedding` ngay lập tức qua `server/utils/embeddingHelper.js` với model cố định `Xenova/paraphrase-multilingual-MiniLM-L12-v2` (không cần chạy script thủ công).
 
 **API Tìm kiếm (`/api/course/semantic-overview`)**:
 ```javascript
@@ -251,22 +253,45 @@ Các giá trị được export qua `AppContext.Provider` cho toàn bộ các co
   success: true,
   query: "react hooks",
   advice: "Lời khuyên AI dạng chuỗi text thuần...", // Gemini-generated, hoặc null
-  recommendations: [ { _id, courseTitle, courseTopic, courseLevel, _score, ... } ]
+  recommendations: [ { _id, courseTitle, courseTopic, courseLevel, _score, ... } ],
+  meta: {
+    totalMatches: 5,
+    searchMethod: "hybrid",
+    adaptiveThreshold: 0.45,
+    weights: { semantic: 0.75, lexical: 0.25 },
+    relatedTopics: ["Web Development", "JavaScript"],
+    embeddingCached: true
+  }
 }
 ```
-* Pha 1 (AI Advice): Gọi Gemini song song với truy vấn DB, sinh lời khuyên động.
-* Pha 2 (Ranking): Hybrid Search giữ nguyên (cosine similarity + lexical scoring).
+* Pha 1 (AI Advice): Gọi Gemini song song với truy vấn DB, sinh **2 câu** lời khuyên lộ trình học.
+  * AI Strategy: dùng **Model Fallback** cho Gemini 3 Flash theo thứ tự `gemini-3-flash-preview` → `gemini-3-flash` để đảm bảo availability.
+* Pha 2 (Ranking): **Weighted Hybrid Search** theo điểm tuyến tính:
+  * `_score = (semanticScore * 0.75) + (normalizedLexicalScore * 0.25)` — cân bằng giữa ngữ nghĩa AI và từ khóa chính xác.
+  * Lexical scoring được **normalize về 0–1** với exact-match bonus (trọng số +5 cho exact phrase match trong title).
+  * Áp dụng **Adaptive Semantic Guard**: threshold tự động = `max(0.25, topScore * 0.6)` thay vì cố định 0.7, tránh lọc mất kết quả hợp lệ khi query ngắn/mơ hồ.
+  * Query embedding được tạo bằng `generateQueryEmbeddingVector(query)` — nhúng trực tiếp text query thô, không qua format CORE/TOPIC/DESC (giảm noise, tăng accuracy).
+  * **Embedding Cache (LRU)**: cache 200 query embeddings gần nhất (TTL 30 phút), tránh compute lại cho cùng query.
+* Embedding pipeline dùng **Weighted Field Embedding** (enriched):
+  * Làm sạch tiêu đề trước khi nhúng bằng cách loại các từ nhiễu: `Lập trình`, `Khóa học`, `Cơ bản`, `Nâng cao`.
+  * Format embedding text: `CORE (clean title + tags)`, `TOPIC` (nhân đôi), `LECTURES` (tên bài giảng), `DESC` (200 ký tự đầu) để tăng mật độ tín hiệu chuyên môn.
+* Giao diện AI Overview chuẩn hóa theo Coursera: Lời khuyên dạng Plain Text (không intro, không markdown) + Top gợi ý khóa học (Interactive Cards) dựa trên điểm Semantic. Card gợi ý có đầy đủ hiệu ứng hover và tự động scrollToTop khi điều hướng.
+* Hiển thị search metadata: badge phương pháp search (Semantic + Lexical), tổng matches, trạng thái cache, chủ đề liên quan.
+* Skeleton loading animation cho AI Overview (shimmer effect) trong khi chờ backend response.
+* Badge "✨ AI Đề xuất" trên CourseCard cho khóa học từ semantic results, với viền xanh nổi bật.
+* Debounce 500ms cho API semantic search call, tránh gọi quá nhiều khi user đang gõ.
 
 **Controller: `aiController.js`**:
-* `chatWithAI`: Nhận `lectureId` → Truy vấn DB lấy `lectureContent` → Inject transcript vào system prompt.
-* `summarizeLesson`: Nhận `lectureId` hoặc `chapterIndex/lectureIndex` → Lấy `lectureContent` → Tóm tắt dựa trên nội dung thực tế.
-* `generateQuiz`: Gom `lectureContent` của tất cả lectures trong chapter → Sinh quiz dựa trên nội dung thực.
+* `chatWithAI`: Nhận `lectureId` → Truy vấn DB lấy `lectureContent` → Inject transcript đầy đủ vào system prompt.
+* `summarizeLesson`: Nhận `lectureId` hoặc `chapterIndex/lectureIndex` → Ưu tiên `lectureContent` đầy đủ để tóm tắt.
+* `generateQuiz`: Gom `lectureContent` của tất cả lectures trong chapter → Sinh quiz dựa trên transcript thực tế.
+* Khi thiếu transcript: fallback về `courseDescription` và yêu cầu AI trả lời theo ngữ cảnh tổng quát.
 * `generateCourseDescription`: Giữ nguyên (sinh mô tả khóa học cho Educator).
 * `checkAIStatus`: Trả về `provider: 'Google Gemini'`.
 
 **Script: `generateCourseEmbeddings.js`**:
-* Chạy độc lập, sử dụng `@xenova/transformers` với model `Xenova/paraphrase-multilingual-MiniLM-L12-v2`.
-* Tạo vector embedding cho khóa học và lưu vào `aiEmbedding` trong Course Schema.
+* Chạy độc lập, tái sử dụng utility `server/utils/embeddingHelper.js` với model `Xenova/paraphrase-multilingual-MiniLM-L12-v2`.
+* Dùng cho backfill/re-index hàng loạt; còn luồng create/update khóa học đã tự động sinh embedding realtime.
 
 **Utility: `server/utils/transcriptHelper.js`**:
 * `fetchYouTubeTranscript(url)`: Trích YouTube ID → Gọi `youtube-transcript` → Trả về text thuần (tối đa 8000 ký tự).

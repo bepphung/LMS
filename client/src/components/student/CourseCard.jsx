@@ -4,7 +4,7 @@ import { AppContext } from '../../context/AppContext'
 import { useContext } from 'react'
 import { Link } from 'react-router-dom'
 
-const CourseCard = ({ course }) => {
+const CourseCard = ({ course, isAiRecommended = false }) => {
 
   const { calculateRating, formatCurrency } = useContext(AppContext)
 
@@ -14,8 +14,15 @@ const CourseCard = ({ course }) => {
   }
 
   return (
-    <Link to={'/course/' + course._id} onClick={() => scrollTo(0, 0)} className='border border-gray-500/30 pb-6 overflow-hidden rounded-lg'>
-      <img className='w-full' src={course.courseThumbnail} alt='' />
+    <Link to={'/course/' + course._id} onClick={() => scrollTo(0, 0)} className={`border pb-6 overflow-hidden rounded-lg transition-all hover:shadow-md ${isAiRecommended ? 'border-blue-300 ring-1 ring-blue-100' : 'border-gray-500/30'}`}>
+      <div className='relative'>
+        <img className='w-full' src={course.courseThumbnail} alt='' />
+        {isAiRecommended && (
+          <span className='absolute top-2 right-2 text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full font-medium shadow-sm'>
+            ✨ AI Đề xuất
+          </span>
+        )}
+      </div>
       <div className='p-3 text-left'>
         <h3 className='text-base font-semibold'>{course.courseTitle}</h3>
         <p className='text-gray-500'>{course.educator?.name || 'Unknown Educator'}</p>

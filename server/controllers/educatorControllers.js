@@ -8,6 +8,7 @@ import User from '../models/User.js'
 import EducatorApplication from '../models/EducatorApplication.js'
 import { assertCloudinaryConfigured } from '../configs/cloudinary.js'
 import { populateTranscripts } from '../utils/transcriptHelper.js'
+import { refreshCourseEmbedding } from '../utils/embeddingHelper.js'
 
 const normalizeCourseLevel = (level = '') => {
   const normalized = String(level).trim().toLowerCase()
@@ -220,13 +221,13 @@ export const addCourse = async (req, res) => {
     newCourse.courseThumbnail = imageUpload.secure_url
     await newCourse.save()
 
-    // Fire-and-forget: auto-fetch transcripts for all lectures
-    populateTranscripts(newCourse.courseContent).then(async (count) => {
-      if (count > 0) {
-        await newCourse.save()
-        console.log(`[Transcript] Populated ${count} lecture transcripts for course: ${newCourse.courseTitle}`)
-      }
-    }).catch(err => console.warn('[Transcript] Background fetch failed:', err.message))
+    const transcriptCount = await populateTranscripts(newCourse.courseContent)
+    if (transcriptCount > 0) {
+      console.log(`[Transcript] Populated ${transcriptCount} lecture transcripts for course: ${newCourse.courseTitle}`)
+    }
+
+    const vector = await refreshCourseEmbedding(newCourse)
+    console.log(`[Embedding] Updated ${vector.length}-dim embedding for course: ${newCourse.courseTitle}`)
 
     res.json({ success: true, message: 'Khóa học đã được tạo thành công', course: newCourse })
 
@@ -280,13 +281,13 @@ export const updateCourse = async (req, res) => {
 
     await course.save()
 
-    // Fire-and-forget: auto-fetch transcripts for lectures missing content
-    populateTranscripts(course.courseContent).then(async (count) => {
-      if (count > 0) {
-        await course.save()
-        console.log(`[Transcript] Populated ${count} lecture transcripts for course: ${course.courseTitle}`)
-      }
-    }).catch(err => console.warn('[Transcript] Background fetch failed:', err.message))
+    const transcriptCount = await populateTranscripts(course.courseContent)
+    if (transcriptCount > 0) {
+      console.log(`[Transcript] Populated ${transcriptCount} lecture transcripts for course: ${course.courseTitle}`)
+    }
+
+    const vector = await refreshCourseEmbedding(course)
+    console.log(`[Embedding] Updated ${vector.length}-dim embedding for course: ${course.courseTitle}`)
 
     res.json({ success: true, message: 'Khóa học đã được cập nhật', course })
   } catch (error) {

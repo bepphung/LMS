@@ -1,37 +1,17 @@
 import Course from '../models/Course.js'
-
-if (typeof fetch !== 'function') {
-  throw new Error('Global fetch is not available. Please run server on Node.js 18+')
-}
+import {
+  AI_BUSY_MESSAGE,
+  createGenAIClient,
+  extractGenAIText,
+  isRateLimitError,
+  sleep
+} from '../utils/genaiHelper.js'
 
 // ─── Gemini Configuration ────────────────────────────────────────────
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const GEMINI_DEFAULT_MODELS = [
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
-]
-
-const GEMINI_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GEMINI_RETRY_ATTEMPTS || 3))
-const MAX_TRANSCRIPT_CONTEXT = 8000 // characters
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-const isGeminiTransientError = ({ status = '', message = '' } = {}) => {
-  const normalizedStatus = String(status).toUpperCase()
-  const normalizedMessage = String(message).toLowerCase()
-
-  return [
-    'RESOURCE_EXHAUSTED',
-    'UNAVAILABLE',
-    'DEADLINE_EXCEEDED',
-    'INTERNAL'
-  ].includes(normalizedStatus)
-    || normalizedMessage.includes('high demand')
-    || normalizedMessage.includes('try again later')
-    || normalizedMessage.includes('temporar')
-    || normalizedMessage.includes('resource_exhausted')
-}
+const GEMINI_DEFAULT_MODELS = ['gemini-3-flash']
+const GEMINI_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GEMINI_RETRY_ATTEMPTS || 2))
+const GEMINI_RATE_LIMIT_DELAY_MS = Math.max(800, Number(process.env.GEMINI_RATE_LIMIT_DELAY_MS || 1500))
 
 const getGeminiModels = () => {
   const configured = process.env.GEMINI_MODEL
@@ -49,63 +29,36 @@ const callGemini = async (prompt, systemPrompt = '') => {
     throw new Error('Thiếu GEMINI_API_KEY trong .env. Vui lòng cấu hình để sử dụng tính năng AI.')
   }
 
+  const ai = createGenAIClient(GEMINI_API_KEY)
   const models = getGeminiModels()
   let lastErrorMessage = 'Unknown Gemini error'
-  let encounteredTransientError = false
+  let encounteredRateLimit = false
+  const composedPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt
 
   for (const model of models) {
     for (let attempt = 1; attempt <= GEMINI_RETRY_ATTEMPTS; attempt += 1) {
-      let data
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{
-                parts: [{ text: `${systemPrompt}\n\n${prompt}` }]
-              }]
-            })
-          }
-        )
-        data = await response.json()
-      } catch (networkError) {
-        data = {
-          error: {
-            status: 'UNAVAILABLE',
-            message: networkError.message || 'Gemini network error'
-          }
+        const response = await ai.models.generateContent({
+          model,
+          contents: composedPrompt
+        })
+        const text = extractGenAIText(response)
+        if (text) return text
+        lastErrorMessage = `Gemini model ${model} returned empty content`
+      } catch (error) {
+        lastErrorMessage = error.message || `Gemini model ${model} failed`
+        if (isRateLimitError(error)) {
+          encounteredRateLimit = true
+          await sleep(GEMINI_RATE_LIMIT_DELAY_MS * attempt)
+          continue
         }
-      }
-
-      if (!data.error && data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        return data.candidates[0].content.parts[0].text
-      }
-
-      const currentError = {
-        status: data?.error?.status,
-        message: data?.error?.message || `Gemini model ${model} failed`
-      }
-      lastErrorMessage = currentError.message
-
-      const isTransient = isGeminiTransientError(currentError)
-      if (isTransient) {
-        encounteredTransientError = true
-      }
-
-      if (!isTransient || attempt === GEMINI_RETRY_ATTEMPTS) {
         break
       }
-
-      // Exponential backoff: 800ms, 1600ms, 3200ms...
-      const backoffMs = 800 * (2 ** (attempt - 1))
-      await sleep(backoffMs)
     }
   }
 
-  if (encounteredTransientError) {
-    throw new Error('AI đang quá tải tạm thời, vui lòng thử lại sau vài giây.')
+  if (encounteredRateLimit) {
+    throw new Error(AI_BUSY_MESSAGE)
   }
 
   throw new Error(lastErrorMessage)
@@ -119,6 +72,8 @@ const parseJSONFromAI = (rawText) => {
   const cleaned = rawText.replace(/```json\n?|```/g, '').trim()
   return JSON.parse(cleaned)
 }
+
+const isBusyAIError = (error) => String(error?.message || '') === AI_BUSY_MESSAGE
 
 const stripHtmlTags = (html = '') => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 
@@ -142,11 +97,6 @@ const sanitizeHtml = (html = '') => {
   }
 
   return cleaned
-}
-
-const truncateText = (text = '', maxLen = MAX_TRANSCRIPT_CONTEXT) => {
-  if (text.length <= maxLen) return text
-  return text.slice(0, maxLen) + '...'
 }
 
 /**
@@ -196,9 +146,12 @@ const buildLectureContext = (lecture, chapter, course) => {
 
   const transcript = (lecture.lectureContent || '').trim()
   if (transcript) {
-    parts.push(`\nNỘI DUNG VĂN BẢN THỰC TẾ CỦA BÀI HỌC:\n${truncateText(transcript)}`)
+    parts.push(`\nNỘI DUNG VĂN BẢN THỰC TẾ CỦA BÀI HỌC:\n${transcript}`)
   } else {
-    parts.push(`\n(Bài học này chưa có transcript. Hãy trả lời dựa trên tiêu đề bài học và kiến thức chung của bạn, nhưng hãy ghi chú rằng câu trả lời là dựa trên kiến thức chung.)`)
+    const courseDescription = stripHtmlTags(course.courseDescription || '').trim()
+    parts.push('\n(Bài học này chưa có transcript.)')
+    parts.push(`MÔ TẢ KHÓA HỌC (ngữ cảnh dự phòng): ${courseDescription || 'Không có mô tả khóa học.'}`)
+    parts.push('Hãy trả lời dựa trên ngữ cảnh tổng quát của khóa học và nêu rõ đây là suy luận tổng quát.')
   }
 
   return parts.join('\n')
@@ -249,9 +202,10 @@ export const chatWithAI = async (req, res) => {
           contextInfo = buildLectureContext(found.lecture, found.chapter, course)
         } else {
           // Fallback: use course description + lessonContext (title)
+          const fallbackDescription = stripHtmlTags(course.courseDescription || '').trim()
           contextInfo = `
 Bối cảnh: Học viên đang học khóa "${course.courseTitle}".
-Mô tả khóa học: ${stripHtmlTags(course.courseDescription || '').substring(0, 500)}
+Mô tả khóa học (ngữ cảnh dự phòng): ${fallbackDescription || 'Không có mô tả khóa học.'}
 ${lessonContext ? `Bài học hiện tại: ${lessonContext}` : ''}`
         }
       }
@@ -277,6 +231,12 @@ Trả lời bằng tiếng Việt, ngắn gọn nhưng đầy đủ thông tin.`
     })
   } catch (error) {
     console.error('AI Chat Error:', error)
+    if (isBusyAIError(error)) {
+      return res.status(429).json({
+        success: false,
+        message: AI_BUSY_MESSAGE
+      })
+    }
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Lỗi khi xử lý yêu cầu AI'
@@ -315,7 +275,7 @@ Chương: ${chapter.chapterTitle}
 Bài: ${lecture.lectureTitle}
 
 NỘI DUNG BÀI HỌC:
-${truncateText(transcript)}
+${transcript}
 
 Hãy tóm tắt thành:
 1. Các khái niệm chính (3-5 ý)
@@ -323,11 +283,12 @@ Hãy tóm tắt thành:
 3. Ứng dụng thực tế
 
 Format output dưới dạng markdown với heading và bullet points.`
-      : `Tóm tắt nội dung bài học sau thành các ý chính (lưu ý: bài học này chưa có transcript, hãy dựa trên tiêu đề và kiến thức chung):
+      : `Tóm tắt nội dung bài học sau thành các ý chính (lưu ý: bài học này chưa có transcript, hãy dựa trên mô tả khóa học và kiến thức tổng quát):
 
 Khóa học: ${course.courseTitle}
 Chương: ${chapter.chapterTitle}
 Bài: ${lecture.lectureTitle}
+Mô tả khóa học (ngữ cảnh dự phòng): ${stripHtmlTags(course.courseDescription || '') || 'Không có mô tả khóa học.'}
 
 Hãy tóm tắt thành:
 1. Các khái niệm chính (3-5 ý)
@@ -347,6 +308,12 @@ Format output dưới dạng markdown với heading và bullet points.`
     })
   } catch (error) {
     console.error('Summarize Error:', error)
+    if (isBusyAIError(error)) {
+      return res.status(429).json({
+        success: false,
+        message: AI_BUSY_MESSAGE
+      })
+    }
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Lỗi khi tóm tắt bài học'
@@ -373,7 +340,7 @@ export const generateQuiz = async (req, res) => {
     const lectureContextParts = chapter.chapterContent.map((lecture, idx) => {
       const transcript = (lecture.lectureContent || '').trim()
       if (transcript) {
-        return `Bài ${idx + 1} - ${lecture.lectureTitle}:\n${truncateText(transcript, 2000)}`
+        return `Bài ${idx + 1} - ${lecture.lectureTitle}:\n${transcript}`
       }
       return `Bài ${idx + 1} - ${lecture.lectureTitle} (chưa có nội dung chi tiết)`
     })
@@ -382,7 +349,10 @@ export const generateQuiz = async (req, res) => {
 
     const contextBlock = hasAnyTranscript
       ? `NỘI DUNG THỰC TẾ CÁC BÀI HỌC TRONG CHƯƠNG:\n${lectureContextParts.join('\n\n')}`
-      : `Các bài học:\n- ${chapter.chapterContent.map(l => l.lectureTitle).join('\n- ')}`
+      : `CHƯƠNG NÀY CHƯA CÓ TRANSCRIPT. DÙNG NGỮ CẢNH DỰ PHÒNG:
+Mô tả khóa học: ${stripHtmlTags(course.courseDescription || '') || 'Không có mô tả khóa học.'}
+Danh sách bài học:
+- ${chapter.chapterContent.map(l => l.lectureTitle).join('\n- ')}`
 
     const prompt = `Tạo ${numberOfQuestions} câu hỏi trắc nghiệm cho chương học sau:
 
@@ -394,7 +364,7 @@ ${contextBlock}
 Yêu cầu:
 - Mỗi câu hỏi có 4 đáp án (A, B, C, D)
 - Chỉ có 1 đáp án đúng
-- ${hasAnyTranscript ? 'Câu hỏi phải dựa trên NỘI DUNG THỰC TẾ của bài học, không bịa đặt' : 'Các câu hỏi đa dạng về mức độ khó'}
+- ${hasAnyTranscript ? 'Câu hỏi phải dựa trên NỘI DUNG THỰC TẾ của bài học, không bịa đặt' : 'Câu hỏi phải dựa trên mô tả khóa học và ngữ cảnh tổng quát, không bịa chi tiết không có trong dữ liệu'}
 - Bao gồm câu hỏi lý thuyết và ứng dụng
 
 Trả về JSON với format:
@@ -433,6 +403,12 @@ Chỉ trả về JSON, không có text khác.`
     })
   } catch (error) {
     console.error('Generate Quiz Error:', error)
+    if (isBusyAIError(error)) {
+      return res.status(429).json({
+        success: false,
+        message: AI_BUSY_MESSAGE
+      })
+    }
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Lỗi khi tạo câu hỏi trắc nghiệm'
@@ -494,6 +470,12 @@ descriptionHtml chỉ được dùng các thẻ HTML sau: <div>, <p>, <ul>, <li>
     })
   } catch (error) {
     console.error('Generate Description Error:', error)
+    if (isBusyAIError(error)) {
+      return res.status(429).json({
+        success: false,
+        message: AI_BUSY_MESSAGE
+      })
+    }
     res.status(500).json({ 
       success: false, 
       message: error.message || 'Lỗi khi tạo mô tả khóa học'
