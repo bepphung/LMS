@@ -10,24 +10,34 @@ let extractorPromise = null
 const stripHtml = (html = '') => String(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 
 export const buildCourseEmbeddingText = (course = {}) => {
-  const tags = Array.isArray(course.courseTags) ? course.courseTags.join(', ') : ''
   const rawTitle = course.courseTitle || ''
   const cleanTitle = rawTitle.replace(/Lập trình|Khóa học|Cơ bản|Nâng cao/gi, '').replace(/\s+/g, ' ').trim()
   const topic = course.courseTopic || ''
-  const summary = stripHtml(course.courseDescription || '').substring(0, 200)
-
-  // Extract lecture titles for richer semantic signal (lightweight, no transcript)
-  const lectureTitles = (course.courseContent || [])
-    .flatMap(ch => (ch.chapterContent || []).map(l => l.lectureTitle || ''))
+  const tags = Array.isArray(course.courseTags) ? course.courseTags.join(', ') : ''
+  
+  // Extract chapter titles and lecture titles for richer semantic signal
+  const contentTitles = (course.courseContent || [])
+    .flatMap(chapter => {
+      const chapterTitle = stripHtml(chapter.chapterTitle || '')
+      const lectureTitles = (chapter.chapterContent || [])
+        .map(lecture => stripHtml(lecture.lectureTitle || ''))
+        .filter(Boolean)
+      return [chapterTitle, ...lectureTitles].filter(Boolean)
+    })
     .filter(Boolean)
     .join(', ')
+  
+  const summary = stripHtml(course.courseDescription || '').substring(0, 200)
 
-  return [
-    `CORE: ${cleanTitle || rawTitle} | ${tags}`,
-    `TOPIC: ${topic} | ${topic}`,
-    lectureTitles ? `LECTURES: ${lectureTitles}` : '',
-    `DESC: ${summary}`
-  ].filter(Boolean).join(' | ')
+  // Natural Language Template for optimal semantic understanding
+  const nlTemplate = [
+    `${cleanTitle || rawTitle} là khóa học về ${topic}.`,
+    tags ? `Các chủ đề then chốt gồm: ${tags}.` : '',
+    contentTitles ? `Nội dung giảng dạy tập trung vào: ${contentTitles}.` : '',
+    `Mô tả ngắn: ${summary}`
+  ].filter(Boolean).join(' ')
+
+  return nlTemplate
 }
 
 export const getEmbeddingExtractor = async () => {

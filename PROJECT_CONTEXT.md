@@ -71,8 +71,8 @@ LMS/
   * Kiến trúc nền tảng Frontend và Backend.
   * Tích hợp Auth (Clerk), thanh toán (Stripe), upload media (Cloudinary).
   * Chức năng cốt lõi: Phân quyền, đăng ký giảng viên, tạo khóa học, xem video.
+  * Tinh chỉnh tính năng AI/Embeddings: Refactor thành Natural Language Template với trích xuất chapter/lecture từ courseContent. Embedding pipeline tối ưu cho model multilingual của Xenova.
 * **Đang làm dở / Tồn đọng**: 
-  * Tinh chỉnh tính năng AI/Embeddings (thấy có script độc lập `generateCourseEmbeddings.js` đang được phát triển).
   * Tối ưu hóa UI/UX và logic edge cases cho luồng thanh toán và player khóa học.
 
 # CODING STANDARDS
@@ -272,9 +272,13 @@ Các giá trị được export qua `AppContext.Provider` cho toàn bộ các co
   * Áp dụng **Adaptive Semantic Guard**: threshold tự động = `max(0.25, topScore * 0.6)` thay vì cố định 0.7, tránh lọc mất kết quả hợp lệ khi query ngắn/mơ hồ.
   * Query embedding được tạo bằng `generateQueryEmbeddingVector(query)` — nhúng trực tiếp text query thô, không qua format CORE/TOPIC/DESC (giảm noise, tăng accuracy).
   * **Embedding Cache (LRU)**: cache 200 query embeddings gần nhất (TTL 30 phút), tránh compute lại cho cùng query.
-* Embedding pipeline dùng **Weighted Field Embedding** (enriched):
-  * Làm sạch tiêu đề trước khi nhúng bằng cách loại các từ nhiễu: `Lập trình`, `Khóa học`, `Cơ bản`, `Nâng cao`.
-  * Format embedding text: `CORE (clean title + tags)`, `TOPIC` (nhân đôi), `LECTURES` (tên bài giảng), `DESC` (200 ký tự đầu) để tăng mật độ tín hiệu chuyên môn.
+* Embedding pipeline dùng **Natural Language Template**:
+   * Xây dựng chuỗi nhúng từ template tự nhiên: `"{cleanTitle} là khóa học về {topic}. Các chủ đề then chốt gồm: {tags}. Nội dung giảng dạy tập trung vào: {chapterTitles + lectureTitles}. Mô tả ngắn: {200 ký tự courseDescription}."` để tối ưu cho model `Xenova/paraphrase-multilingual-MiniLM-L12-v2`.
+   * Duyệt sâu vào mảng `courseContent` (nested chapters/lectures) để trích xuất toàn bộ `chapterTitle` và `lectureTitle`.
+   * Làm sạch tiêu đề bằng loại các từ nhiễu: `Lập trình`, `Khóa học`, `Cơ bản`, `Nâng cao` để AI tập trung vào thực thể chuyên môn.
+   * Loại bỏ HTML tags và chuẩn hóa khoảng trắng trước nhúng, đảm bảo text sạch sẽ vào model.
+   * Vector trả về định dạng mảng số thực (384 chiều) để lưu tại `aiEmbedding` field trong MongoDB.
+
 * Giao diện AI Overview chuẩn hóa theo Coursera: Lời khuyên dạng Plain Text (không intro, không markdown) + Top gợi ý khóa học (Interactive Cards) dựa trên điểm Semantic. Card gợi ý có đầy đủ hiệu ứng hover và tự động scrollToTop khi điều hướng.
 * Hiển thị search metadata: badge phương pháp search (Semantic + Lexical), tổng matches, trạng thái cache, chủ đề liên quan.
 * Skeleton loading animation cho AI Overview (shimmer effect) trong khi chờ backend response.
