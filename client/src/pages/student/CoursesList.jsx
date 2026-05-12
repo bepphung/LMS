@@ -43,7 +43,7 @@ const SkeletonOverview = () => (
 
 const CoursesList = () => {
 
-  const { navigate, allCourses, backendUrl } = useContext(AppContext)
+  const { navigate, allCourses, backendUrl, fetchAllCourses } = useContext(AppContext)
   const { input } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const keyword = (searchParams.get('q') || input || '').trim()
@@ -120,6 +120,10 @@ const CoursesList = () => {
   const discountedPrice = (course) => {
     return Number((course.coursePrice - (course.discount * course.coursePrice) / 100).toFixed(2))
   }
+
+  useEffect(() => {
+    void fetchAllCourses()
+  }, [])
 
   useEffect(() => {
     if (!allCourses || allCourses.length === 0) return
@@ -238,11 +242,6 @@ const CoursesList = () => {
           <div className='flex items-center justify-between gap-4 flex-wrap'>
             <div className='flex items-center gap-3'>
               <h2 className='text-2xl font-semibold text-gray-800'>✨ AI Overview</h2>
-              {searchMeta && (
-                <span className='text-xs bg-blue-100 text-blue-700 px-2.5 py-1 rounded-full font-medium'>
-                  {searchMeta.searchMethod === 'hybrid' ? 'Semantic + Lexical' : searchMeta.searchMethod}
-                </span>
-              )}
             </div>
             {searchMeta && (
               <span className='text-xs text-gray-500'>
@@ -274,35 +273,15 @@ const CoursesList = () => {
                           <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
                             {course.courseLevel}
                           </span>
-                          {course._score != null && (
-                            <span className="text-[10px] bg-green-50 text-green-600 px-2 py-0.5 rounded-full">
-                              Score: {Number(course._score).toFixed(2)}
+                          {(course.courseTags || []).slice(0, 2).map((tag) => (
+                            <span key={tag} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                              {tag}
                             </span>
-                          )}
+                          ))}
                         </div>
                       </Link>
                     ))}
                   </div>
-                </div>
-              )}
-
-              {/* Related topics suggestions */}
-              {searchMeta?.relatedTopics?.length > 0 && (
-                <div className='mt-4 pt-3 border-t border-blue-50'>
-                  <p className='text-xs text-gray-500'>
-                    Chủ đề liên quan:{' '}
-                    {searchMeta.relatedTopics.map((topic, i) => (
-                      <span key={topic}>
-                        <span
-                          className='text-blue-600 hover:underline cursor-pointer'
-                          onClick={() => setSearchParams({ q: topic })}
-                        >
-                          {topic}
-                        </span>
-                        {i < searchMeta.relatedTopics.length - 1 && ', '}
-                      </span>
-                    ))}
-                  </p>
                 </div>
               )}
             </div>

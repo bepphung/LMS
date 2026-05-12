@@ -110,9 +110,26 @@ const computeAdaptiveThreshold = (semanticScores = []) => {
 }
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const GEMINI_ADVICE_MODELS = ['gemini-3-flash-preview', 'gemini-3-flash']
+const GEMINI_ADVICE_MODELS = ['gemini-3-flash-preview', 'gemini-3-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite']
 const SEMANTIC_WEIGHT = 0.75
 const LEXICAL_WEIGHT = 0.25
+
+const isModelNotFoundError = (error) => {
+  const message = String(error?.message || '').toLowerCase()
+  return message.includes('not found')
+    || message.includes('is not supported for generatecontent')
+    || message.includes('models/')
+}
+
+const isTemporarilyUnavailableError = (error) => {
+  const status = Number(error?.status || error?.code || 0)
+  const message = String(error?.message || '').toLowerCase()
+  return status === 503
+    || message.includes('503')
+    || message.includes('unavailable')
+    || message.includes('high demand')
+    || message.includes('overloaded')
+}
 
 const callGeminiForAdvice = async (query) => {
   const hasGeminiApiKey = Boolean(GEMINI_API_KEY)
@@ -133,8 +150,9 @@ Bắt đầu nội dung lời khuyên ngay lập tức. KHÔNG giới thiệu b�
 KHÔNG sử dụng bất kỳ định dạng Markdown nào (không dùng dấu ** để in đậm, không gạch đầu dòng). Chỉ trả về văn bản thuần (Plain Text).
 
 Trả lời bằng tiếng Việt.`
-    const models = (process.env.GEMINI_MODEL || GEMINI_ADVICE_MODELS.join(','))
+    const configuredModels = (process.env.GEMINI_MODEL || '')
       .split(',').map(m => m.trim()).filter(Boolean)
+    const models = [...new Set([...configuredModels, ...GEMINI_ADVICE_MODELS])]
     console.log(`[AI Advice] Models configured: ${models.join(', ')}`)
 
     for (const model of models) {
@@ -149,6 +167,14 @@ Trả lời bằng tiếng Việt.`
         if (sanitizedText) return sanitizedText
         console.warn(`[AI Advice] Empty/invalid Gemini response structure from model ${model}`)
       } catch (modelError) {
+        if (isModelNotFoundError(modelError)) {
+          console.warn(`[AI Advice] Model ${model} unavailable, trying next model`)
+          continue
+        }
+        if (isTemporarilyUnavailableError(modelError)) {
+          console.warn(`[AI Advice] Model ${model} temporarily unavailable, trying next model`)
+          continue
+        }
         if (isRateLimitError(modelError)) {
           console.warn(`[AI Advice] Rate limit detected on ${model}, trying next model`)
           continue
@@ -176,6 +202,7 @@ const mapCourseForSearch = (course = {}) => ({
   courseTopic: course.courseTopic || 'Tổng quát',
   courseLevel: course.courseLevel || 'beginner',
   courseTags: Array.isArray(course.courseTags) ? course.courseTags : [],
+  courseRatings: Array.isArray(course.courseRatings) ? course.courseRatings : [],
   estimatedDurationHours: computeEstimatedDurationHours(course)
 })
 

@@ -9,18 +9,34 @@ import {
 
 // ─── Gemini Configuration ────────────────────────────────────────────
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
-const GEMINI_DEFAULT_MODELS = ['gemini-3-flash']
+const GEMINI_DEFAULT_MODELS = ['gemini-3-flash-preview', 'gemini-3-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.0-flash-lite']
 const GEMINI_RETRY_ATTEMPTS = Math.max(1, Number(process.env.GEMINI_RETRY_ATTEMPTS || 2))
 const GEMINI_RATE_LIMIT_DELAY_MS = Math.max(800, Number(process.env.GEMINI_RATE_LIMIT_DELAY_MS || 1500))
 
 const getGeminiModels = () => {
-  const configured = process.env.GEMINI_MODEL
-  if (!configured) return GEMINI_DEFAULT_MODELS
-
-  return configured
+  const configuredModels = String(process.env.GEMINI_MODEL || '')
     .split(',')
     .map(m => m.trim())
     .filter(Boolean)
+
+  return [...new Set([...configuredModels, ...GEMINI_DEFAULT_MODELS])]
+}
+
+const isModelNotFoundError = (error) => {
+  const message = String(error?.message || '').toLowerCase()
+  return message.includes('not found')
+    || message.includes('is not supported for generatecontent')
+    || message.includes('models/')
+}
+
+const isTemporarilyUnavailableError = (error) => {
+  const status = Number(error?.status || error?.code || 0)
+  const message = String(error?.message || '').toLowerCase()
+  return status === 503
+    || message.includes('503')
+    || message.includes('unavailable')
+    || message.includes('high demand')
+    || message.includes('overloaded')
 }
 
 // ─── Core AI Call (Gemini Only) ──────────────────────────────────────
@@ -33,9 +49,13 @@ const callGemini = async (prompt, systemPrompt = '') => {
   const models = getGeminiModels()
   let lastErrorMessage = 'Unknown Gemini error'
   let encounteredRateLimit = false
+  let encounteredTemporaryBusy = false
   const composedPrompt = systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt
 
+  console.log(`[AI] Gemini models configured: ${models.join(', ')}`)
+
   for (const model of models) {
+    console.log(`[AI] Calling Gemini model: ${model}`)
     for (let attempt = 1; attempt <= GEMINI_RETRY_ATTEMPTS; attempt += 1) {
       try {
         const response = await ai.models.generateContent({
@@ -47,11 +67,23 @@ const callGemini = async (prompt, systemPrompt = '') => {
         lastErrorMessage = `Gemini model ${model} returned empty content`
       } catch (error) {
         lastErrorMessage = error.message || `Gemini model ${model} failed`
-        if (isRateLimitError(error)) {
-          encounteredRateLimit = true
+        if (isModelNotFoundError(error)) {
+          console.warn(`[AI] Model ${model} unavailable, trying next model`)
+          break
+        }
+        if (isTemporarilyUnavailableError(error)) {
+          encounteredTemporaryBusy = true
+          console.warn(`[AI] Model ${model} temporarily unavailable, attempt ${attempt}/${GEMINI_RETRY_ATTEMPTS}`)
           await sleep(GEMINI_RATE_LIMIT_DELAY_MS * attempt)
           continue
         }
+        if (isRateLimitError(error)) {
+          encounteredRateLimit = true
+          console.warn(`[AI] Rate limit on model ${model}, attempt ${attempt}/${GEMINI_RETRY_ATTEMPTS}`)
+          await sleep(GEMINI_RATE_LIMIT_DELAY_MS * attempt)
+          continue
+        }
+        console.warn(`[AI] Failed model ${model}: ${lastErrorMessage}`)
         break
       }
     }
@@ -60,8 +92,11 @@ const callGemini = async (prompt, systemPrompt = '') => {
   if (encounteredRateLimit) {
     throw new Error(AI_BUSY_MESSAGE)
   }
+  if (encounteredTemporaryBusy) {
+    throw new Error(AI_BUSY_MESSAGE)
+  }
 
-  throw new Error(lastErrorMessage)
+  throw new Error(lastErrorMessage || 'Không thể tạo phản hồi từ Gemini')
 }
 
 // Alias for clarity
@@ -77,26 +112,15 @@ const isBusyAIError = (error) => String(error?.message || '') === AI_BUSY_MESSAG
 
 const stripHtmlTags = (html = '') => html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
 
-const sanitizeHtml = (html = '') => {
-  let cleaned = html
-    .replace(/```html\n?|```/gi, '')
-    .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, '')
+const sanitizePlainText = (text = '') => {
+  return String(text)
+    .replace(/```(?:json|html|markdown)?\n?/gi, '')
+    .replace(/```/g, '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/[*_~`#]/g, '')
+    .replace(/^\s*[-•]\s+/gm, '')
+    .replace(/\s+/g, ' ')
     .trim()
-
-  const firstTagIndex = cleaned.search(/<[^>]+>/)
-  if (firstTagIndex >= 0) {
-    const lastTagEnd = cleaned.lastIndexOf('>')
-    if (lastTagEnd > firstTagIndex) {
-      cleaned = cleaned.slice(firstTagIndex, lastTagEnd + 1)
-    }
-  }
-
-  if (!cleaned.includes('<')) {
-    cleaned = `<p>${cleaned}</p>`
-  }
-
-  return cleaned
 }
 
 /**
@@ -164,18 +188,11 @@ const buildFallbackDescription = ({ courseTitle, topics, targetAudience, courseL
     .filter(Boolean)
     .slice(0, 5)
 
-  const topicItems = topicsList.length
-    ? topicsList.map(topic => `<li>${topic}</li>`).join('')
-    : '<li>Nội dung thực chiến, bám sát bài toán thực tế trong dự án IT</li><li>Kết hợp lý thuyết nền tảng và bài tập ứng dụng</li><li>Định hướng kỹ năng để sẵn sàng làm việc trong môi trường chuyên nghiệp</li>'
+  const topicSentence = topicsList.length
+    ? `Các nội dung trọng tâm gồm ${topicsList.join(', ')}.`
+    : 'Nội dung tập trung vào kiến thức nền tảng, kỹ năng thực hành và cách áp dụng vào dự án thực tế.'
 
-  return `
-<div class="course-description">
-  <p><strong>${courseTitle}</strong> là khóa học được thiết kế ngắn gọn, thực tế và dễ tiếp cận, giúp học viên nắm chắc kiến thức cốt lõi và áp dụng ngay vào dự án. Khóa học tập trung vào tư duy giải quyết vấn đề, quy trình làm việc bài bản và kỹ năng triển khai hiệu quả trong môi trường phát triển phần mềm hiện đại.</p>
-  <ul>
-    ${topicItems}
-  </ul>
-  <p>${targetAudience ? `Phù hợp cho ${targetAudience}.` : 'Phù hợp cho sinh viên IT và người mới đi làm muốn xây nền tảng vững chắc.'} ${courseLevel ? `Mức độ: ${courseLevel}.` : ''} Sau khóa học, bạn có thể tự tin xây dựng sản phẩm chất lượng, làm việc nhóm hiệu quả và nâng cao năng lực nghề nghiệp theo lộ trình rõ ràng.</p>
-</div>`.trim()
+  return `${courseTitle} là khóa học được thiết kế thực tế và dễ tiếp cận, giúp học viên nắm chắc kiến thức cốt lõi để áp dụng ngay vào công việc. ${topicSentence} ${targetAudience ? `Khóa học phù hợp cho ${targetAudience}.` : 'Khóa học phù hợp cho sinh viên IT và người mới đi làm muốn xây nền tảng vững chắc.'} ${courseLevel ? `Mức độ phù hợp: ${courseLevel}.` : ''} Sau khi hoàn thành, học viên có thể tự tin triển khai sản phẩm chất lượng, làm việc nhóm hiệu quả và phát triển lộ trình nghề nghiệp rõ ràng.`.trim()
 }
 
 // ─── API Controllers ─────────────────────────────────────────────────
@@ -426,7 +443,7 @@ export const generateCourseDescription = async (req, res) => {
     }
 
     const prompt = `Bạn là chuyên gia viết nội dung cho nền tảng e-learning.
-Nhiệm vụ: tạo mô tả khóa học NGẮN GỌN, chuyên nghiệp, dễ đọc và đúng định dạng.
+Nhiệm vụ: tạo mô tả khóa học ngắn gọn, chuyên nghiệp, dễ đọc.
 
 Thông tin khóa học:
 
@@ -435,33 +452,29 @@ ${topics ? `Các chủ đề chính: ${topics}` : ''}
 ${targetAudience ? `Đối tượng học viên: ${targetAudience}` : ''}
 ${courseLevel ? `Trình độ: ${courseLevel}` : ''}
 
-Yêu cầu:
-1. Mô tả hấp dẫn, chuyên nghiệp (120-220 từ)
-2. Nêu rõ lợi ích khi học
-3. Liệt kê các kỹ năng sẽ đạt được
-4. Phù hợp cho nền tảng e-learning
-5. Không thêm giải thích, không markdown, không code fence, không tiêu đề ngoài nội dung mô tả
+YÊU CẦU NGHIÊM NGẶT:
+- Chỉ trả về văn bản thuần (Plain Text), không HTML, không Markdown, không code fence.
+- Viết khoảng 120-220 từ, mạch lạc và tự nhiên.
+- Nêu rõ lợi ích khi học và kỹ năng đạt được.
+- Bắt đầu nội dung ngay, không mở đầu kiểu "Chào bạn", "Tôi sẽ", "Dưới đây là".`
 
-Trả về DUY NHẤT JSON hợp lệ theo format:
-{
-  "descriptionHtml": "<div class=\\"course-description\\">...</div>"
-}
-
-descriptionHtml chỉ được dùng các thẻ HTML sau: <div>, <p>, <ul>, <li>, <strong>.`
-
-    const aiRaw = await callAI(prompt)
-
-    let description = ''
+    let aiRaw = ''
     try {
-      const parsed = parseJSONFromAI(aiRaw)
-      description = sanitizeHtml(parsed?.descriptionHtml || '')
-    } catch {
-      description = sanitizeHtml(aiRaw)
+      aiRaw = await callAI(prompt)
+    } catch (error) {
+      console.warn('[Generate Description] Gemini unavailable, using local fallback:', error.message)
+      const description = sanitizePlainText(buildFallbackDescription({ courseTitle, topics, targetAudience, courseLevel }))
+      return res.json({
+        success: true,
+        description
+      })
     }
 
-    const wordCount = stripHtmlTags(description).split(' ').filter(Boolean).length
+    let description = sanitizePlainText(aiRaw)
+
+    const wordCount = description.split(' ').filter(Boolean).length
     if (wordCount < 70) {
-      description = buildFallbackDescription({ courseTitle, topics, targetAudience, courseLevel })
+      description = sanitizePlainText(buildFallbackDescription({ courseTitle, topics, targetAudience, courseLevel }))
     }
 
     res.json({ 

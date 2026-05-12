@@ -59,7 +59,18 @@ const AdminApplications = () => {
       })
       if (data.success) {
         toast.success(data.message)
-        fetchApplications()
+        setApplications(prev => {
+          const updated = prev.map(app => app._id === appId ? { ...app, status: 'approved' } : app)
+          if (filter !== 'all' && filter !== 'approved') {
+            return updated.filter(app => app._id !== appId)
+          }
+          return updated
+        })
+        setStatusCounts(counts => ({
+          ...counts,
+          pending: counts.pending - 1,
+          approved: counts.approved + 1
+        }))
         setSelectedApp(null)
       }
     } catch (error) {
@@ -84,7 +95,18 @@ const AdminApplications = () => {
       )
       if (data.success) {
         toast.success(data.message)
-        fetchApplications()
+        setApplications(prev => {
+          const updated = prev.map(app => app._id === appId ? { ...app, status: 'rejected', rejectionReason } : app)
+          if (filter !== 'all' && filter !== 'rejected') {
+            return updated.filter(app => app._id !== appId)
+          }
+          return updated
+        })
+        setStatusCounts(counts => ({
+          ...counts,
+          pending: counts.pending - 1,
+          rejected: counts.rejected + 1
+        }))
         setSelectedApp(null)
         setRejectionReason('')
       }

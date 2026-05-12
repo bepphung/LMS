@@ -156,8 +156,33 @@ const Player = () => {
 
       if (data.success) {
         toast.success(data.message)
-        fetchUserEnrolledCourses()
-        fetchAllCourses()
+        const numericRating = Number(rating)
+        setInitialRating(numericRating)
+        setCourseData((prev) => {
+          if (!prev) return prev
+          const currentUserId = String(userData?._id || '')
+          const currentRatings = Array.isArray(prev.courseRatings) ? prev.courseRatings : []
+          const existingIndex = currentRatings.findIndex((item) => String(item.userId) === currentUserId)
+
+          if (existingIndex > -1) {
+            const updatedRatings = [...currentRatings]
+            updatedRatings[existingIndex] = {
+              ...updatedRatings[existingIndex],
+              rating: numericRating
+            }
+            return { ...prev, courseRatings: updatedRatings }
+          }
+
+          return {
+            ...prev,
+            courseRatings: [...currentRatings, { userId: currentUserId, rating: numericRating }]
+          }
+        })
+
+        await Promise.all([
+          fetchUserEnrolledCourses(),
+          fetchAllCourses()
+        ])
       } else {
         toast.error(data.message)
       }

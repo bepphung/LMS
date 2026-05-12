@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { AppContext } from '../../context/AppContext'
 import Loading from '../../components/student/Loading'
@@ -31,6 +31,19 @@ const CourseDetails = () => {
     Array.isArray(userData.enrolledCourses) &&
     userData.enrolledCourses.includes(courseData._id)
   )
+
+  const fetchCourseData = useCallback(async () => {
+    try {
+      const { data } = await axios.get(backendUrl + '/api/course/' + id)
+      if (data.success) {
+        setCourseData(data.courseData)
+      } else {
+        toast.error(data.message)
+      }
+    } catch (error) {
+      toast.error(error.message)
+    }
+  }, [backendUrl, id])
 
   const clearPreviewTimer = () => {
     if (previewTimerRef.current) {
@@ -155,21 +168,22 @@ const CourseDetails = () => {
   }
 
   useEffect(() => {
-    const fetchCourseData = async () => {
-      try {
-        const { data } = await axios.get(backendUrl + '/api/course/' + id)
-        if (data.success) {
-          setCourseData(data.courseData)
-        } else {
-          toast.error(data.message)
-        }
-      } catch (error) {
-        toast.error(error.message)
-      }
+    fetchCourseData()
+  }, [fetchCourseData])
+
+  useEffect(() => {
+    const refreshOnReturn = () => {
+      fetchCourseData()
     }
 
-    fetchCourseData()
-  }, [backendUrl, id])
+    window.addEventListener('focus', refreshOnReturn)
+    window.addEventListener('pageshow', refreshOnReturn)
+
+    return () => {
+      window.removeEventListener('focus', refreshOnReturn)
+      window.removeEventListener('pageshow', refreshOnReturn)
+    }
+  }, [fetchCourseData])
 
   const toggleSection = (index) => {
     setOpenSections((prev) => (
@@ -357,4 +371,3 @@ const CourseDetails = () => {
 }
 
 export default CourseDetails
-

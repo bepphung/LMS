@@ -5,7 +5,6 @@ import { AppContext } from '../../context/AppContext'
 import { toast } from 'react-toastify'
 import axios from 'axios'
 import AIDescriptionGenerator from '../../components/educator/AIDescriptionGenerator'
-import Footer from '../../components/educator/Footer'
 
 
 const generateId = () =>
@@ -15,7 +14,7 @@ const generateId = () =>
 
 const AddCourse = () => {
 
-  const { backendUrl, getToken, formatCurrency } = useContext(AppContext)
+  const { backendUrl, getToken, formatCurrency, fetchAllCourses } = useContext(AppContext)
   const quillRef = useRef(null)
   const editorRef = useRef(null)
 
@@ -27,6 +26,7 @@ const AddCourse = () => {
   const [discount, setDiscount] = useState(0)
   const [image, setImage] = useState(null)
   const [chapters, setChapters] = useState([])
+  const [submitting, setSubmitting] = useState(false)
   const [showPopup, setShowPopup] = useState(false)
   const [currentChapterId, setCurrentChapterId] = useState(null)
   const [lectureDetails, setLectureDetails] = useState({
@@ -102,10 +102,12 @@ const AddCourse = () => {
   const handleSubmit = async (e) => {
     try {
       e.preventDefault()
+      if (submitting) return
       if (!image) {
         toast.error('Please upload course thumbnail')
         return
       }
+      setSubmitting(true)
 
       const courseData = {
         courseTitle,
@@ -132,6 +134,7 @@ const AddCourse = () => {
       })
 
       if (data.success) {
+        void fetchAllCourses()
         toast.success('Course added successfully')
         setCourseTitle('')
         setCourseTopic('Tổng quát')
@@ -147,6 +150,8 @@ const AddCourse = () => {
       }
     } catch (error) {
       toast.error(error.message)
+    } finally {
+      setSubmitting(false)
     }
     
   }
@@ -165,7 +170,7 @@ const AddCourse = () => {
   const finalCoursePrice = Math.max(0, numericCoursePrice - (numericCoursePrice * numericDiscount / 100))
 
   return (
-    <div className='h-screen overflow-y-auto md:p-8 p-4 pt-8 pb-0'>
+    <div className='md:p-8 p-4 pt-8 pb-0 relative'>
       <form onSubmit={handleSubmit} className='w-full max-w-5xl text-gray-700 space-y-6 pb-8'>
         <div className='bg-white border border-gray-200 rounded-xl p-5 md:p-6 shadow-sm space-y-5'>
           <h1 className='text-2xl font-semibold text-gray-900'>Thêm khóa học mới</h1>
@@ -189,8 +194,7 @@ const AddCourse = () => {
                 currentTitle={courseTitle}
                 onGenerate={(description) => {
                   if (quillRef.current) {
-                    quillRef.current.setContents([])
-                    quillRef.current.clipboard.dangerouslyPasteHTML(description)
+                    quillRef.current.setText(description || '')
                   }
                 }}
               />
@@ -372,8 +376,12 @@ const AddCourse = () => {
         </div>
 
         <div className='flex justify-end'>
-          <button type='submit' className='bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-8 rounded'>
-            THÊM KHÓA HỌC
+          <button
+            type='submit'
+            disabled={submitting}
+            className='bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white py-2.5 px-8 rounded'
+          >
+            {submitting ? 'ĐANG LƯU...' : 'THÊM KHÓA HỌC'}
           </button>
         </div>
       </form>

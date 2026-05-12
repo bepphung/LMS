@@ -56,7 +56,7 @@ const AdminUsers = () => {
       })
       if (data.success) {
         toast.success(data.message)
-        fetchUsers()
+        setUsers(prev => prev.map(user => user._id === userId ? { ...user, isBanned: false } : user))
       }
     } catch (error) {
       toast.error(error.response?.data?.message || error.message)
@@ -72,7 +72,7 @@ const AdminUsers = () => {
       })
       if (data.success) {
         toast.success(data.message)
-        fetchUsers()
+        setUsers(prev => prev.map(user => user._id === userId ? { ...user, isBanned: true } : user))
       }
     } catch (error) {
       toast.error(error.response?.data?.message || error.message)

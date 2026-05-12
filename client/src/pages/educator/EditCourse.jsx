@@ -157,9 +157,10 @@ const EditCourse = () => {
     } else if (action === 'edit') {
       const chapter = chapters.find(c => c.chapterId === chapterId)
       const newTitle = prompt('Nhập tên chương mới:', chapter?.chapterTitle)
-      if (newTitle) {
+      const normalizedTitle = String(newTitle || '').trim()
+      if (normalizedTitle) {
         setChapters(chapters.map(c => 
-          c.chapterId === chapterId ? { ...c, chapterTitle: newTitle } : c
+          c.chapterId === chapterId ? { ...c, chapterTitle: normalizedTitle } : c
         ))
       }
     }
@@ -338,8 +339,7 @@ const EditCourse = () => {
                 currentTitle={courseTitle}
                 onGenerate={(description) => {
                   if (quillRef.current) {
-                    quillRef.current.setContents([])
-                    quillRef.current.clipboard.dangerouslyPasteHTML(description)
+                    quillRef.current.setText(description || '')
                   }
                 }}
               />
@@ -474,6 +474,13 @@ const EditCourse = () => {
                 </div>
                 <div className='flex items-center gap-3'>
                   <span className='text-gray-500 text-sm'>{chapter.chapterContent.length} bài giảng</span>
+                  <button
+                    type='button'
+                    className='text-blue-600 hover:text-blue-700 text-sm font-medium'
+                    onClick={() => handleChapter('edit', chapter.chapterId)}
+                  >
+                    Sửa chương
+                  </button>
                   <img
                     className='cursor-pointer w-4 opacity-60 hover:opacity-100'
                     src={assets.cross_icon}

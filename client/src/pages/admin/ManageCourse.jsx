@@ -54,7 +54,18 @@ const AdminCourses = () => {
       })
       if (data.success) {
         toast.success(data.message)
-        setCourses(courses.filter(c => c._id !== courseId))
+        setCourses(prev => {
+          const deletedCourse = prev.find(c => c._id === courseId)
+          if (deletedCourse) {
+            setVisibilityCounts(counts => ({
+              ...counts,
+              all: counts.all - 1,
+              true: deletedCourse.isPublished ? counts.true - 1 : counts.true,
+              false: !deletedCourse.isPublished ? counts.false - 1 : counts.false
+            }))
+          }
+          return prev.filter(c => c._id !== courseId)
+        })
       }
     } catch (error) {
       toast.error(error.response?.data?.message || error.message)
@@ -73,7 +84,18 @@ const AdminCourses = () => {
       )
       if (data.success) {
         toast.success(data.message)
-        setCourses(prev => prev.map(course => (course._id === courseId ? { ...course, isPublished: data.isPublished } : course)))
+        setCourses(prev => {
+          const updated = prev.map(course => (course._id === courseId ? { ...course, isPublished: data.isPublished } : course))
+          if (filter !== 'all' && String(data.isPublished) !== filter) {
+            return updated.filter(c => c._id !== courseId)
+          }
+          return updated
+        })
+        setVisibilityCounts(counts => ({
+          ...counts,
+          true: data.isPublished ? counts.true + 1 : counts.true - 1,
+          false: data.isPublished ? counts.false - 1 : counts.false + 1
+        }))
       }
     } catch (error) {
       toast.error(error.response?.data?.message || error.message)
@@ -159,22 +181,15 @@ const AdminCourses = () => {
                     <span className='text-sm text-gray-600'>{course.educator?.name}</span>
                   </div>
                 </td>
-                <td className='px-4 py-3 text-sm'>
-                  {course.discount > 0 ? (
-                    <div>
-                      <span className='text-gray-400 line-through'>{formatCurrency(course.coursePrice)}</span>
-                      <span className='ml-2 text-green-600 font-medium'>{formatCurrency(course.coursePrice - course.coursePrice * course.discount / 100)}</span>
-                    </div>
-                  ) : (
-                    <span>{formatCurrency(course.coursePrice)}</span>
-                  )}
+                <td className='px-4 py-3 text-sm font-medium'>
+                  {formatCurrency(course.coursePrice - course.coursePrice * (course.discount || 0) / 100)}
                 </td>
                 <td className='px-4 py-3 text-sm text-gray-600'>{course.enrolledStudents?.length || 0}</td>
                 <td className='px-4 py-3'>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
                     course.isPublished ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
                   }`}>
-                    {course.isPublished ? 'Đang hiển thị' : 'Đã ẩn'}
+                    {course.isPublished ? 'Hiển thị' : 'Đã ẩn'}
                   </span>
                 </td>
                 <td className='px-4 py-3 text-center'>
