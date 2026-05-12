@@ -37,10 +37,12 @@ const StudentsEnrolled = () => {
   }, [hasEducatorAccess])
 
   return enrolledStudents ? (
-    <div className='min-h-screen flex flex-col items-start justify-between md:p-8 md:pb-0 p-4 pt-8 pb-0'>
-      <div className='flex flex-col items-center max-w-4xl w-full overflow-hidden rounded-md bg-white border border-gray-500/20'>
-        <table className='table-fixed md:table-auto w-full overflow-hidden pb-4'>
-          <thead className='text-gray-900 border-b border-gray-500/20 text-sm text-left'>
+    <div className='h-screen overflow-y-auto md:p-8 p-4 pt-8 pb-0'>
+      <div className='w-full max-w-5xl text-gray-700 space-y-6 pb-8'>
+        <h2 className='text-lg font-medium text-gray-800'>Học viên đã đăng ký</h2>
+        <div className='w-full overflow-hidden rounded-xl bg-white border border-gray-200 shadow-sm'>
+          <table className='table-fixed md:table-auto w-full overflow-hidden pb-4'>
+            <thead className='text-gray-900 border-b border-gray-200 text-sm text-left bg-gray-50'>
             <tr>
               <th className='px-4 py-3 font-semibold text-center hidden sm:table-cell'>#</th>
               <th className='px-4 py-3 font-semibold'>Tên học viên</th>
@@ -48,7 +50,7 @@ const StudentsEnrolled = () => {
               <th className='px-4 py-3 font-semibold hidden sm:table-cell'>Ngày đăng ký</th>
             </tr>
           </thead>
-          <tbody className='text-sm text-gray-500'>
+            <tbody className='text-sm text-gray-500'>
             {enrolledStudents.map((item, index) => (
               <tr key={index} className='border-b border-gray-500/20'>
                 <td className='px-4 py-3 text-center hidden sm:table-cell'>{index + 1}</td>
@@ -60,8 +62,9 @@ const StudentsEnrolled = () => {
                 <td className='px-4 py-3 hidden sm:table-cell'>{new Date(item.purchaseDate).toLocaleDateString()}</td>
               </tr>
             ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   ) : <Loading />

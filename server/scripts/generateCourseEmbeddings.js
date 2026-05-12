@@ -22,7 +22,7 @@ const run = async () => {
         { aiEmbeddingModel: { $ne: EMBEDDING_MODEL_NAME } }
       ]
     })
-  }).select('_id courseTitle courseDescription courseTopic courseLevel courseTags aiEmbedding aiEmbeddingModel')
+  }).select('_id courseTitle courseDescription courseTopic courseLevel courseTags courseContent aiEmbedding aiEmbeddingModel')
 
   if (targetCourses.length === 0) {
     console.log('Khong co khoa hoc nao can cap nhat embedding.')

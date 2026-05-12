@@ -35,12 +35,31 @@ const EditCourse = () => {
   const [isPublished, setIsPublished] = useState(true)
   const [showPopup, setShowPopup] = useState(false)
   const [currentChapterId, setCurrentChapterId] = useState(null)
+  const [lectureModalMode, setLectureModalMode] = useState('add')
+  const [editingLectureIndex, setEditingLectureIndex] = useState(null)
   const [lectureDetails, setLectureDetails] = useState({
     lectureTitle: '',
     lectureDuration: '',
     lectureUrl: '',
     isPreviewFree: false
   })
+
+  const resetLectureForm = () => {
+    setLectureDetails({
+      lectureTitle: '',
+      lectureDuration: '',
+      lectureUrl: '',
+      isPreviewFree: false
+    })
+    setCurrentChapterId(null)
+    setEditingLectureIndex(null)
+    setLectureModalMode('add')
+  }
+
+  const closeLecturePopup = () => {
+    setShowPopup(false)
+    resetLectureForm()
+  }
 
   // Fetch course data
   useEffect(() => {
@@ -148,16 +167,46 @@ const EditCourse = () => {
 
   const handleLecture = (action, chapterId, lectureIndex) => {
     if (action === 'add') {
+      setLectureModalMode('add')
       setCurrentChapterId(chapterId)
+      setEditingLectureIndex(null)
+      setLectureDetails({
+        lectureTitle: '',
+        lectureDuration: '',
+        lectureUrl: '',
+        isPreviewFree: false
+      })
+      setShowPopup(true)
+    } else if (action === 'edit') {
+      const chapter = chapters.find(c => c.chapterId === chapterId)
+      const lecture = chapter?.chapterContent?.[lectureIndex]
+
+      if (!lecture) {
+        toast.error('Không tìm thấy bài giảng để chỉnh sửa')
+        return
+      }
+
+      setLectureModalMode('edit')
+      setCurrentChapterId(chapterId)
+      setEditingLectureIndex(lectureIndex)
+      setLectureDetails({
+        lectureTitle: lecture.lectureTitle || '',
+        lectureDuration: String(lecture.lectureDuration ?? ''),
+        lectureUrl: lecture.lectureUrl || '',
+        isPreviewFree: Boolean(lecture.isPreviewFree)
+      })
       setShowPopup(true)
     } else if (action === 'remove') {
       if (confirm('Bạn có chắc muốn xóa bài giảng này?')) {
         setChapters(
           chapters.map((chapter) => {
             if (chapter.chapterId === chapterId) {
-              chapter.chapterContent.splice(lectureIndex, 1)
+              return {
+                ...chapter,
+                chapterContent: chapter.chapterContent.filter((_, index) => index !== lectureIndex)
+              }
             }
-            return { ...chapter }
+            return chapter
           })
         )
       }
@@ -172,25 +221,36 @@ const EditCourse = () => {
 
     setChapters(
       chapters.map((chapter) => {
-        if (chapter.chapterId === currentChapterId) {
-          const newLecture = {
-            ...lectureDetails,
-            lectureDuration: Number(lectureDetails.lectureDuration),
-            lectureOrder: chapter.chapterContent.length > 0 ? chapter.chapterContent.slice(-1)[0].lectureOrder + 1 : 1,
-            lectureId: generateId()
+        if (chapter.chapterId !== currentChapterId) return chapter
+
+        if (lectureModalMode === 'edit' && editingLectureIndex !== null) {
+          return {
+            ...chapter,
+            chapterContent: chapter.chapterContent.map((lecture, index) => {
+              if (index !== editingLectureIndex) return lecture
+              return {
+                ...lecture,
+                ...lectureDetails,
+                lectureDuration: Number(lectureDetails.lectureDuration)
+              }
+            })
           }
-          chapter.chapterContent.push(newLecture)
         }
-        return { ...chapter }
+
+        const newLecture = {
+          ...lectureDetails,
+          lectureDuration: Number(lectureDetails.lectureDuration),
+          lectureOrder: chapter.chapterContent.length > 0 ? chapter.chapterContent.slice(-1)[0].lectureOrder + 1 : 1,
+          lectureId: generateId()
+        }
+
+        return {
+          ...chapter,
+          chapterContent: [...chapter.chapterContent, newLecture]
+        }
       })
     )
-    setShowPopup(false)
-    setLectureDetails({
-      lectureTitle: '',
-      lectureDuration: '',
-      lectureUrl: '',
-      isPreviewFree: false
-    })
+    closeLecturePopup()
   }
 
   const handleSubmit = async (e) => {
@@ -426,18 +486,27 @@ const EditCourse = () => {
               {!chapter.collapsed && (
                 <div className='p-4'>
                   {chapter.chapterContent.map((lecture, lectureIndex) => (
-                    <div key={lecture.lectureId} className='flex justify-between items-center mb-2 text-sm'>
-                      <span>
+                    <div key={lecture.lectureId} className='flex justify-between items-center mb-2 text-sm gap-3'>
+                      <span className='text-gray-700'>
                         {lectureIndex + 1}. {lecture.lectureTitle} - {lecture.lectureDuration} phút
                         {lecture.isPreviewFree && <span className='text-green-600 ml-2'>(Xem thử)</span>}
                       </span>
-                      <img
-                        className='cursor-pointer w-3 opacity-60 hover:opacity-100'
-                        src={assets.cross_icon}
-                        alt=""
-                        title='Xóa bài giảng'
-                        onClick={() => handleLecture('remove', chapter.chapterId, lectureIndex)}
-                      />
+                      <div className='flex items-center gap-3 shrink-0'>
+                        <button
+                          type='button'
+                          className='text-blue-600 hover:text-blue-700 font-medium'
+                          onClick={() => handleLecture('edit', chapter.chapterId, lectureIndex)}
+                        >
+                          Sửa
+                        </button>
+                        <img
+                          className='cursor-pointer w-3 opacity-60 hover:opacity-100'
+                          src={assets.cross_icon}
+                          alt=""
+                          title='Xóa bài giảng'
+                          onClick={() => handleLecture('remove', chapter.chapterId, lectureIndex)}
+                        />
+                      </div>
                     </div>
                   ))}
                   <div
@@ -461,7 +530,7 @@ const EditCourse = () => {
           {showPopup && (
             <div className='fixed inset-0 flex items-center justify-center z-50 bg-black/30'>
               <div className='bg-white text-gray-700 p-4 rounded relative w-full max-w-80'>
-                <h2 className='text-lg font-semibold mb-4'>Thêm bài giảng</h2>
+                <h2 className='text-lg font-semibold mb-4'>{lectureModalMode === 'edit' ? 'Sửa bài giảng' : 'Thêm bài giảng'}</h2>
 
                 <div className='mb-2'>
                   <p>Tên bài giảng</p>
@@ -509,11 +578,11 @@ const EditCourse = () => {
                   className='w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded'
                   onClick={addLecture}
                 >
-                  Thêm
+                  {lectureModalMode === 'edit' ? 'Lưu thay đổi' : 'Thêm'}
                 </button>
 
                 <img
-                  onClick={() => setShowPopup(false)}
+                  onClick={closeLecturePopup}
                   src={assets.cross_icon}
                   alt=""
                   className='absolute top-4 right-4 w-4 cursor-pointer'

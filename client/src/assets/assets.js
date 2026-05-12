@@ -103,25 +103,25 @@ export const dummyEducatorData = {
 
 export const dummyTestimonial = [
     {
-        name: 'Donald Jackman',
-        role: 'SWE 1 @ Amazon',
+        name: 'Trung Nguyên',
+        role: 'Frontend Developer @ Techcombank',
         image: assets.profile_img_1,
         rating: 5,
-        feedback: 'I\'ve been using Imagify for nearly two years, primarily for Instagram, and it has been incredibly user-friendly, making my work much easier.',
+        feedback: 'Mình học lộ trình React ở đây để chuyển từ thực tập lên junior. Bài giảng ngắn gọn, có bài tập thực hành nên áp dụng vào dự án thật rất nhanh.',
     },
     {
-        name: 'Richard Nelson',
-        role: 'SWE 2 @ Samsung',
+        name: 'Đức Trọng',
+        role: 'Data Analyst @ MoMo',
         image: assets.profile_img_2,
         rating: 4,
-        feedback: 'I\'ve been using Imagify for nearly two years, primarily for Instagram, and it has been incredibly user-friendly, making my work much easier.',
+        feedback: 'Điều mình thích nhất là có thể học theo tốc độ riêng sau giờ làm. Khóa SQL và Power BI giúp mình tự tin xử lý dashboard cho team chỉ sau vài tuần.',
     },
     {
-        name: 'James Washington',
-        role: 'SWE 2 @ Google',
+        name: 'Thạc Bảo',
+        role: 'Product Designer @ Zalo',
         image: assets.profile_img_3,
         rating: 4.5,
-        feedback: 'I\'ve been using Imagify for nearly two years, primarily for Instagram, and it has been incredibly user-friendly, making my work much easier.',
+        feedback: 'Nội dung UX rất sát thực tế, từ research đến prototyping đều có case study rõ ràng. Mình đã dùng trực tiếp vào portfolio và pass vòng phỏng vấn.',
     },
 ];
 

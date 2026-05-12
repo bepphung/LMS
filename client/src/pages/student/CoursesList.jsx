@@ -65,6 +65,22 @@ const CoursesList = () => {
     return new Set(aiRecommendations.map(c => c._id))
   }, [aiRecommendations])
 
+  // Show AI recommendations first, then normal keyword/filter results (deduplicated by _id)
+  const prioritizedCourses = useMemo(() => {
+    const aiTop = aiRecommendations.slice(0, 3)
+    const merged = [...aiTop]
+    const existingIds = new Set(aiTop.map(course => String(course._id)))
+
+    filteredCourse.forEach((course) => {
+      const id = String(course._id)
+      if (!existingIds.has(id)) {
+        merged.push(course)
+      }
+    })
+
+    return merged
+  }, [aiRecommendations, filteredCourse])
+
   const availableTopics = useMemo(() => {
     const topics = allCourses.map(course => course.courseTopic).filter(Boolean)
     return [...new Set(topics)].sort((a, b) => a.localeCompare(b, 'vi'))
@@ -341,12 +357,12 @@ const CoursesList = () => {
       </div>
 
       <div className='mt-8 mb-2 text-sm text-gray-600'>
-        Tìm thấy <span className='font-semibold text-gray-800'>{filteredCourse.length}</span> khóa học phù hợp.
+        Tìm thấy <span className='font-semibold text-gray-800'>{prioritizedCourses.length}</span> khóa học phù hợp.
       </div>
 
       <div className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 my-16 gap-3 px-2 md:p-0'>
-        {filteredCourse.map((course, index) => <CourseCard key={index} course={course} isAiRecommended={aiRecommendedIds.has(course._id)} />)}
-        {filteredCourse.length === 0 && (
+        {prioritizedCourses.map((course, index) => <CourseCard key={index} course={course} isAiRecommended={aiRecommendedIds.has(course._id)} />)}
+        {prioritizedCourses.length === 0 && (
           <div className='col-span-full py-12 text-center text-gray-500 border rounded-xl'>
             Không tìm thấy khóa học phù hợp với tiêu chí hiện tại.
           </div>

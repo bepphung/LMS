@@ -5,6 +5,8 @@ import { AppContext } from '../../context/AppContext'
 import { toast } from 'react-toastify'
 import axios from 'axios'
 import AIDescriptionGenerator from '../../components/educator/AIDescriptionGenerator'
+import Footer from '../../components/educator/Footer'
+
 
 const generateId = () =>
   (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')

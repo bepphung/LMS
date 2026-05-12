@@ -1,6 +1,5 @@
-import React from 'react'
-import { Route, Routes, useMatch } from 'react-router-dom'
-import { useContext } from 'react'
+import React, { useContext } from 'react'
+import { Navigate, Route, Routes, useLocation, useMatch } from 'react-router-dom'
 import { useClerk, useUser } from '@clerk/clerk-react'
 import Home from './pages/student/Home'
 import CoursesList from './pages/student/CoursesList'
@@ -15,7 +14,11 @@ import AddCourse from './pages/educator/AddCourse'
 import MyCourses from './pages/educator/MyCourses'
 import EditCourse from './pages/educator/EditCourse'
 import StudentsEnrolled from './pages/educator/StudentsEnrolled'
-import AdminLayout, { AdminDashboard, AdminApplications, AdminUsers, AdminCourses } from './pages/educator/AdminPages'
+import Admin from './pages/admin/Admin'
+import DashboardAdmin from './pages/admin/Dashboard'
+import ManageApplication from './pages/admin/ManageApplication'
+import ManageUser from './pages/admin/ManageUser'
+import ManageCourse from './pages/admin/ManageCourse'
 import Navbar from './components/student/Navbar'
 import "quill/dist/quill.snow.css"
 import { ToastContainer } from 'react-toastify'
@@ -48,11 +51,13 @@ const DisabledAccountNotice = ({ onGoHome }) => {
 
 const App = () => {
   const { signOut } = useClerk()
-  const { user } = useUser()
+  const { user, isLoaded } = useUser()
   const { userData } = useContext(AppContext)
+  const location = useLocation()
 
   const isEducatorRoute = useMatch('/educator/*')
   const isAdminRoute = useMatch('/admin/*')
+  const isAdminUser = user?.publicMetadata?.role === 'admin'
   const isBannedUser = Boolean(user && userData?.isBanned)
 
   const handleBannedGoHome = async () => {
@@ -68,6 +73,16 @@ const App = () => {
       <div className='text-default min-h-screen bg-white'>
         <ToastContainer />
         <DisabledAccountNotice onGoHome={handleBannedGoHome} />
+      </div>
+    )
+  }
+
+  if (isLoaded && isAdminUser && !location.pathname.startsWith('/admin')) {
+    return (
+      <div className='text-default min-h-screen bg-white'>
+        <ToastContainer />
+        <Loading />
+        <Navigate to='/admin' replace />
       </div>
     )
   }
@@ -96,11 +111,11 @@ const App = () => {
         </Route>
 
         {/* Admin Routes */}
-        <Route path='/admin' element={<AdminLayout />}>
-          <Route path='/admin' element={<AdminDashboard />} />
-          <Route path='applications' element={<AdminApplications />} />
-          <Route path='users' element={<AdminUsers />} />
-          <Route path='courses' element={<AdminCourses />} />
+        <Route path='/admin' element={<Admin />}>
+          <Route path='/admin' element={<DashboardAdmin />} />
+          <Route path='applications' element={<ManageApplication />} />
+          <Route path='users' element={<ManageUser />} />
+          <Route path='courses' element={<ManageCourse />} />
         </Route>
       </Routes>
     </div>

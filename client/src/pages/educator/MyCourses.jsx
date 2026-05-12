@@ -80,18 +80,18 @@ const MyCourses = () => {
   }, [hasEducatorAccess])
 
   return  courses ? (
-    <div className='h-screen flex flex-col items-start justify-between md:p-8 md:pb-0 pt-8 pb-0'>
-      <div className='w-full'>
-        <div className='flex items-center justify-between mb-4'>
-          <h2 className='text-lg font-medium'>Khóa học của tôi</h2>
-          <button 
+    <div className='h-screen overflow-y-auto md:p-8 p-4 pt-8 pb-0'>
+      <div className='w-full max-w-5xl text-gray-700 space-y-6 pb-8'>
+        <div className='flex items-center justify-between'>
+          <h2 className='text-lg font-medium text-gray-800'>Khóa học của tôi</h2>
+          <button
             onClick={() => navigateTo('/educator/add-course')}
             className='bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700'
           >
             + Thêm khóa học
           </button>
         </div>
-        <div className='flex flex-col items-center max-w-4xl w-full overflow-hidden rounded-md bg-white border border-gray-500/20'>
+        <div className='w-full overflow-hidden rounded-xl bg-white border border-gray-200 shadow-sm'>
           <table className='md:table-auto table-fixed w-full overflow-hidden'>
             <thead className='text-gray-900 border-b boder-gray-500/20 text-sm text-left'>
               <tr>
