@@ -37,7 +37,7 @@ const StudentsEnrolled = () => {
   }, [hasEducatorAccess])
 
   return enrolledStudents ? (
-    <div className='h-screen overflow-y-auto md:p-8 p-4 pt-8 pb-0'>
+    <div className='md:p-8 p-4 pt-8 pb-0'>
       <div className='w-full max-w-5xl text-gray-700 space-y-6 pb-8'>
         <h2 className='text-lg font-medium text-gray-800'>Học viên đã đăng ký</h2>
         <div className='w-full overflow-hidden rounded-xl bg-white border border-gray-200 shadow-sm'>

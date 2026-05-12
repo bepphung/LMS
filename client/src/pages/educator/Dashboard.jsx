@@ -37,8 +37,8 @@ const Dashboard = () => {
   }, [hasEducatorAccess])
 
   return dashboardData ? (
-    <div className='h-screen overflow-y-auto md:p-8 p-4 pt-8 pb-0'>
-      <div className='w-full max-w-5xl text-gray-700 space-y-6 pb-8'>
+    <div className='md:p-8 p-4 pt-8 pb-0'>
+      <div className='w-full max-w-4xl text-gray-700 space-y-8 pb-8'>
         <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4'>
           <div className='bg-white border border-gray-200 rounded-xl p-5 shadow-sm'>
             <div className='flex items-center gap-3'>

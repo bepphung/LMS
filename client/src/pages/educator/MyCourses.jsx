@@ -80,7 +80,7 @@ const MyCourses = () => {
   }, [hasEducatorAccess])
 
   return  courses ? (
-    <div className='h-screen overflow-y-auto md:p-8 p-4 pt-8 pb-0'>
+    <div className='md:p-8 p-4 pt-8 pb-0'>
       <div className='w-full max-w-5xl text-gray-700 space-y-6 pb-8'>
         <div className='flex items-center justify-between'>
           <h2 className='text-lg font-medium text-gray-800'>Khóa học của tôi</h2>

@@ -306,7 +306,7 @@ const EditCourse = () => {
   const finalCoursePrice = Math.max(0, numericCoursePrice - (numericCoursePrice * numericDiscount / 100))
 
   return (
-    <div className='h-screen overflow-y-auto md:p-8 p-4 pt-8 pb-0'>
+    <div className='md:p-8 p-4 pt-8 pb-0'>
       <form onSubmit={handleSubmit} className='w-full max-w-5xl text-gray-700 space-y-6 pb-8'>
         <div className='bg-white border border-gray-200 rounded-xl p-5 md:p-6 shadow-sm space-y-5'>
           <div className='flex items-center justify-between gap-3 flex-wrap'>
